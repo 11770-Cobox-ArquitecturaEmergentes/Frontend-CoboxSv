@@ -13,9 +13,9 @@ import {
 export const sidebarItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'SmartVision IA', path: '/smartvision', icon: BrainCircuit },
-  { label: 'Vehiculos', path: '/vehicles', icon: Truck },
+  { label: 'Vehículos', path: '/vehicles', icon: Truck },
   { label: 'Conductores', path: '/drivers', icon: Users },
-  { label: 'Ordenes', path: '/orders', icon: Package },
+  { label: 'Órdenes', path: '/orders', icon: Package },
   { label: 'Rutas', path: '/routes', icon: Map },
   { label: 'Incidentes', path: '/incidents', icon: AlertTriangle },
   { label: 'Mantenimiento', path: '/maintenance', icon: Wrench },
