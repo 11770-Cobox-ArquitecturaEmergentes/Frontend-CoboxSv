@@ -1,14 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
+import type { AuthUser } from '../types';
 
 const TOKEN_KEY = 'cobox_token';
-
-export type AuthUser = {
-  id: string;
-  email: string;
-  name: string;
-  roles: string[];
-};
 
 export interface AuthState {
   isAuthenticated: boolean;
