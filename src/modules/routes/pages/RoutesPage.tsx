@@ -153,7 +153,7 @@ export function RoutesPage() {
           <Select value={selectedVehicleId} onChange={(event) => setSelectedVehicleId(event.target.value)} className="w-full">
             {availableVehicles.map((vehicle) => (
               <option key={vehicle.id} value={vehicle.id}>
-                {vehicle.plate} - {vehicle.type}
+                {vehicle.plate}
               </option>
             ))}
           </Select>

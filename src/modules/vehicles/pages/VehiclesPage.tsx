@@ -10,6 +10,7 @@ import { Edit2, Eye, Package, Plus, Search, Trash2, TrendingUp, Truck, Wrench } 
 import { Badge, Button, Card, Input, Select, Skeleton, useToast } from '@/components/ui';
 import { ApiErrorState } from '@/components/shared';
 import type { CreateVehiclePayload, Vehicle, VehicleStatus } from '@/modules/fleet.types';
+import { isAxiosError } from 'axios';
 import { useCreateVehicle, useVehicles } from '../hooks';
 import { VehicleFormDialog, VehicleStatusBadge } from '../components';
 
@@ -68,8 +69,11 @@ export function VehiclesPage() {
         setIsFormOpen(false);
         toast({ title: 'Vehiculo agregado correctamente', type: 'success' });
       },
-      onError: () => {
-        toast({ title: 'No se pudo agregar el vehiculo', type: 'error' });
+      onError: (error) => {
+        const message = isAxiosError(error)
+          ? (error.response?.data as { message?: string })?.message ?? 'Error del servidor'
+          : 'No se pudo agregar el vehiculo';
+        toast({ title: message, type: 'error' });
       },
     });
   };

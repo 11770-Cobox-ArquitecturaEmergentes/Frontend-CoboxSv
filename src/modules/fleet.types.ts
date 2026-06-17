@@ -14,11 +14,8 @@ export type Vehicle = {
 
 export type CreateVehiclePayload = {
   plate: string;
-  type: string;
   capacity: number;
   status: VehicleStatus;
-  year: number;
-  brand: string;
   model: string;
 };
 

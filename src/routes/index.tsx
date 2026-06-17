@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthLayout, DashboardLayout, DriverLayout } from '@/components/layouts';
-import { LoginPage } from '@/features/auth';
+import { LoginPage, RegisterPage } from '@/features/auth';
 import { DashboardPage } from '@/features/dashboard';
 import { SmartVisionPage } from '@/features/smartvision';
 import { VehiclesPage } from '@/modules/vehicles';
@@ -19,6 +19,7 @@ export function AppRoutes() {
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/auth" element={<AuthLayout />}>
         <Route path="login" element={<LoginPage />} />
+        <Route path="register" element={<RegisterPage />} />
       </Route>
       <Route element={<DashboardLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />
