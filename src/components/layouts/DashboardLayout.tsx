@@ -1,25 +1,21 @@
-import { Outlet, Navigate } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
-import { Topbar } from './Topbar';
+import { Navigate, Outlet } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/store';
+import { Sidebar } from './Sidebar';
+import { Topbar } from './Topbar';
 
 export function DashboardLayout() {
-  const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
 
-  if (!isAuthenticated || user?.role !== 'supervisor') {
-    return <Navigate to="/auth/login" replace />;
-  }
+  if (!isAuthenticated) return <Navigate to="/auth/login" replace />;
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar />
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-7xl mx-auto">
-            <Outlet />
-          </div>
+        <main className="flex-1 overflow-y-auto p-6 lg:p-8">
+          <Outlet />
         </main>
       </div>
     </div>

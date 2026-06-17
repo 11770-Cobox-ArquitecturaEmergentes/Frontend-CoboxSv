@@ -6,7 +6,7 @@ import { Topbar } from './Topbar';
 export function DriverLayout() {
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
 
-  if (!isAuthenticated || user?.role !== 'driver') {
+  if (!isAuthenticated || !user?.roles.includes('ROLE_DRIVER')) {
     return <Navigate to="/auth/login" replace />;
   }
 
