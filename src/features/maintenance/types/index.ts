@@ -1,5 +1,7 @@
-export type MaintenanceEvent = {
-  id: string;
-  vehicleId: string;
-  status: 'scheduled' | 'in_progress' | 'completed';
+import type { VehicleStatus } from '@/modules/fleet.types';
+
+export type VehicleStatusLog = {
+  status: VehicleStatus;
+  changedAt: string;
+  reason: string;
 };
