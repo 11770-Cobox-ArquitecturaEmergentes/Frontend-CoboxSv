@@ -1,1 +1,1 @@
-export * from './useSmartVisionDetections';
+export { useDashboard } from './useDashboard';

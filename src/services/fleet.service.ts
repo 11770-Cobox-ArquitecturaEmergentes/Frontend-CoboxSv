@@ -3,6 +3,7 @@ import type {
   CreateDriverPayload,
   CreateVehiclePayload,
   Driver,
+  DriverStatus,
   Route,
   Vehicle,
   VehicleStatus,
@@ -49,6 +50,25 @@ type BackendCreateVehicleRequest = {
   capacityKg: number;
 };
 
+type BackendDriverResource = {
+  id: number;
+  fullName: string;
+  licenseNumber: string;
+  driverStatus: 'AVAILABLE' | 'ASSIGNED' | 'OFFLINE';
+  assignedRoutes?: number;
+};
+
+type BackendDriverListResponse = {
+  value: BackendDriverResource[];
+  Count: number;
+};
+
+type BackendCreateDriverRequest = {
+  fullName: string;
+  licenseNumber: string;
+  driverStatus: string;
+};
+
 // ── Mappers ─────────────────────────────────────────────────────
 
 const VEHICLE_STATUS_TO_FRONTEND: Record<string, VehicleStatus> = {
@@ -76,6 +96,36 @@ function toCreateVehicleRequest(payload: CreateVehiclePayload): BackendCreateVeh
   return { plateNumber: payload.plate, capacityKg: payload.capacity };
 }
 
+const DRIVER_STATUS_TO_FRONTEND: Record<string, DriverStatus> = {
+  AVAILABLE: 'available',
+  ASSIGNED: 'assigned',
+  OFFLINE: 'offline',
+};
+
+const DRIVER_STATUS_TO_BACKEND: Record<DriverStatus, string> = {
+  available: 'AVAILABLE',
+  assigned: 'ASSIGNED',
+  offline: 'OFFLINE',
+};
+
+function toDriver(backend: BackendDriverResource): Driver {
+  return {
+    id: String(backend.id),
+    name: backend.fullName,
+    license: backend.licenseNumber,
+    status: DRIVER_STATUS_TO_FRONTEND[backend.driverStatus] ?? 'offline',
+    assignedRoutes: backend.assignedRoutes ?? 0,
+  };
+}
+
+function toCreateDriverRequest(payload: CreateDriverPayload): BackendCreateDriverRequest {
+  return {
+    fullName: payload.name,
+    licenseNumber: payload.license,
+    driverStatus: DRIVER_STATUS_TO_BACKEND[payload.status],
+  };
+}
+
 // ── Service ─────────────────────────────────────────────────────
 
 export const fleetService = {
@@ -97,18 +147,18 @@ export const fleetService = {
 
   // ── Drivers ───────────────────────────────────────────────────
   async getDrivers() {
-    const response = await fleetApi.get<Driver[] | ApiEnvelope<Driver[]>>('/api/v1/drivers');
-    return ensureArray(unwrapApiData<Driver[]>(response.data), 'conductores');
+    const response = await fleetApi.get<BackendDriverListResponse | BackendDriverResource[]>('/api/v1/drivers');
+    return unwrapListResponse(response.data).map(toDriver);
   },
 
   async getDriverById(driverId: string) {
-    const response = await fleetApi.get<Driver | ApiEnvelope<Driver>>(`/api/v1/drivers/${driverId}`);
-    return unwrapApiData<Driver>(response.data);
+    const { data } = await fleetApi.get<BackendDriverResource>(`/api/v1/drivers/${driverId}`);
+    return toDriver(data);
   },
 
   async createDriver(payload: CreateDriverPayload) {
-    const response = await fleetApi.post<Driver | ApiEnvelope<Driver>>('/api/v1/drivers', payload);
-    return unwrapApiData<Driver>(response.data);
+    const { data } = await fleetApi.post<BackendDriverResource>('/api/v1/drivers', toCreateDriverRequest(payload));
+    return toDriver(data);
   },
 
   // ── Routes ────────────────────────────────────────────────────
