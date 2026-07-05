@@ -1,46 +1,51 @@
-export type IncidentType = 'ACCIDENT' | 'BREAKDOWN' | 'ROAD_BLOCK' | 'DELIVERY_ISSUE' | 'OTHER';
-export type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
-export type IncidentStatus = 'REPORTED' | 'IN_REVIEW' | 'RESOLVED';
+/** Backend Response Types - Mapeo directo desde API */
 
-export type IncidentResolution = {
+export type IncidentSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export type IncidentStatus =
+  | "OPEN"
+  | "IN_PROGRESS"
+  | "ESCALATED"
+  | "RESOLVED"
+  | "CLOSED";
+
+export type BackendIncidentResource = {
+  id: number;
+  incidentId: string; // UUID
   type: string;
-  summary: string;
-  responsible: string;
-  closedAt: string;
+  description: string;
+  reportedAt: string; // ISO datetime
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  responsibleUserId?: number;
 };
 
-export type IncidentStatusLog = {
-  status: IncidentStatus;
-  changedAt: string;
-  note?: string;
-};
+/** Frontend Domain Model */
 
 export type Incident = {
-  id: string;
-  serviceReference: string; // ID de la orden relacionada
-  reporterReference: string; // Nombre/ID del conductor reportero
-  type: IncidentType;
+  id: number; // Backend ID (no usamos incidentId como PK)
+  incidentId: string; // UUID del backend
+  type: string;
+  description: string;
+  reportedAt: string;
   severity: IncidentSeverity;
   status: IncidentStatus;
-  description: string;
-  location: string;
-  evidenceReferences: string[];
-  statusHistory: IncidentStatusLog[];
-  resolution?: IncidentResolution;
-  createdAt: string;
+  responsibleUserId?: number;
 };
+
+/** Request Payloads */
 
 export type CreateIncidentPayload = {
-  serviceReference: string;
-  reporterReference: string;
-  type: IncidentType;
-  severity: IncidentSeverity;
+  type: string;
   description: string;
-  location: string;
+  severity: IncidentSeverity;
+  responsibleUserId: number;
 };
 
-export type ResolveIncidentPayload = {
-  type: string;
-  summary: string;
-  responsible: string;
+export type UpdateIncidentStatusPayload = {
+  status: IncidentStatus;
+};
+
+export type AssignResponsiblePayload = {
+  responsibleUserId: number;
 };

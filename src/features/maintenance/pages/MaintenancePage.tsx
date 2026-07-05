@@ -1,369 +1,634 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   useReactTable,
-} from '@tanstack/react-table';
+} from "@tanstack/react-table";
 import {
   Wrench,
   Search,
-  Truck,
-  X,
-  History,
-  AlertOctagon,
-  CheckCircle2,
-  Calendar,
+  Plus,
   Eye,
-} from 'lucide-react';
-import { Badge, Button, Card, Input, Skeleton, useToast } from '@/components/ui';
-import { ApiErrorState } from '@/components/shared';
-import type { Vehicle, VehicleStatus } from '@/modules/fleet.types';
-import { useMaintenanceVehicles, useVehicleStatusHistory, useUpdateVehicleStatus } from '../hooks';
-import { ChangeStatusDialog } from '../components';
+  X,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+} from "lucide-react";
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Skeleton,
+  useToast,
+} from "@/components/ui";
+import { ApiErrorState } from "@/components/shared";
+import { PageHeader } from "@/components/common";
+import {
+  useMaintenanceOrders,
+  useCreateMaintenanceOrder,
+  useScheduleMaintenanceOrder,
+  useStartMaintenanceOrder,
+  useCompleteMaintenanceOrder,
+  useCancelMaintenanceOrder,
+} from "../hooks";
+import type {
+  MaintenanceOrder,
+  MaintenanceOrderStatus,
+  MaintenanceType,
+  MaintenancePriority,
+} from "../types";
 
-const columnHelper = createColumnHelper<Vehicle>();
+const columnHelper = createColumnHelper<MaintenanceOrder>();
 
-const statusLabels: Record<VehicleStatus, string> = {
-  operational: 'Operativo (AVAILABLE)',
-  maintenance: 'Mantenimiento (MAINTENANCE)',
-  out_of_service: 'Fuera de servicio (INACTIVE)',
+const typeLabels: Record<MaintenanceType, string> = {
+  PREVENTIVE: "Preventivo",
+  CORRECTIVE: "Correctivo",
+  PREDICTIVE: "Predictivo",
 };
 
-const statusClasses: Record<VehicleStatus, string> = {
-  operational: 'bg-[#DFF6F1] text-[#0F766E] border border-teal-205',
-  maintenance: 'bg-amber-50 text-amber-700 border border-amber-200',
-  out_of_service: 'bg-red-50 text-red-755 border border-red-200',
+const priorityLabels: Record<MaintenancePriority, string> = {
+  LOW: "Baja",
+  MEDIUM: "Media",
+  HIGH: "Alta",
+  CRITICAL: "Crítica",
+};
+
+const statusLabels: Record<MaintenanceOrderStatus, string> = {
+  OPEN: "Abierto",
+  SCHEDULED: "Programado",
+  IN_PROGRESS: "En Progreso",
+  COMPLETED: "Completado",
+  CANCELLED: "Cancelado",
+};
+
+const statusClasses: Record<MaintenanceOrderStatus, string> = {
+  OPEN: "bg-slate-100 text-slate-700 border border-slate-200",
+  SCHEDULED: "bg-blue-50 text-blue-700 border border-blue-200",
+  IN_PROGRESS: "bg-amber-50 text-amber-700 border border-amber-200",
+  COMPLETED: "bg-green-50 text-green-700 border border-green-200",
+  CANCELLED: "bg-red-50 text-red-700 border border-red-200",
+};
+
+const priorityClasses: Record<MaintenancePriority, string> = {
+  LOW: "bg-slate-100 text-slate-700",
+  MEDIUM: "bg-amber-100 text-amber-700",
+  HIGH: "bg-orange-100 text-orange-700",
+  CRITICAL: "bg-red-100 text-red-700",
 };
 
 export function MaintenancePage() {
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | VehicleStatus>('all');
-  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const [isChangeStatusOpen, setIsChangeStatusOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | MaintenanceOrderStatus
+  >("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | MaintenanceType>("all");
+  const [selectedOrder, setSelectedOrder] = useState<MaintenanceOrder | null>(
+    null,
+  );
 
   const { toast } = useToast();
-  const vehiclesQuery = useMaintenanceVehicles();
-  const historyQuery = useVehicleStatusHistory(selectedVehicle?.id);
-  const updateStatusMutation = useUpdateVehicleStatus();
+  const ordersQuery = useMaintenanceOrders();
 
-  const vehicles = useMemo(() => vehiclesQuery.data ?? [], [vehiclesQuery.data]);
-  const history = useMemo(() => historyQuery.data ?? [], [historyQuery.data]);
+  const scheduleOrderMutation = useScheduleMaintenanceOrder();
+  const startOrderMutation = useStartMaintenanceOrder();
+  const completeOrderMutation = useCompleteMaintenanceOrder();
+  const cancelOrderMutation = useCancelMaintenanceOrder();
 
-  // Filtrar vehículos
-  const filteredVehicles = useMemo(() => {
+  const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
+
+  // Filtrar órdenes
+  const filteredOrders = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return vehicles.filter((vehicle) => {
+    return orders.filter((order) => {
       const matchesSearch =
-        vehicle.plate.toLowerCase().includes(term) ||
-        vehicle.brand.toLowerCase().includes(term) ||
-        vehicle.model.toLowerCase().includes(term);
-      const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
-      return matchesSearch && matchesStatus;
+        order.id.toString().includes(term) ||
+        order.vehicleId.toString().includes(term) ||
+        order.type?.toLowerCase().includes(term) ||
+        order.reason?.toLowerCase().includes(term);
+      const matchesStatus =
+        statusFilter === "all" || order.status === statusFilter;
+      const matchesType =
+        typeFilter === "all" || order.maintenanceType === typeFilter;
+      return matchesSearch && matchesStatus && matchesType;
     });
-  }, [vehicles, search, statusFilter]);
+  }, [orders, search, statusFilter, typeFilter]);
 
-  const activeSelectedVehicle = useMemo(() => {
-    if (!selectedVehicle) return null;
-    return vehicles.find((v) => v.id === selectedVehicle.id) || null;
-  }, [vehicles, selectedVehicle]);
+  const activeSelectedOrder = useMemo(() => {
+    if (!selectedOrder) return null;
+    return orders.find((o) => o.id === selectedOrder.id) || null;
+  }, [orders, selectedOrder]);
 
-  // Métricas de flota
+  // Métricas
   const metrics = useMemo(() => {
+    const active = orders.filter(
+      (o) => o.status !== "COMPLETED" && o.status !== "CANCELLED",
+    );
     return {
-      total: vehicles.length,
-      maintenance: vehicles.filter((v) => v.status === 'maintenance').length,
-      outOfService: vehicles.filter((v) => v.status === 'out_of_service').length,
-      operational: vehicles.filter((v) => v.status === 'operational').length,
+      total: orders.length,
+      active: active.length,
+      openOrders: active.filter((o) => o.status === "OPEN").length,
+      inProgress: active.filter((o) => o.status === "IN_PROGRESS").length,
+      completed: orders.filter((o) => o.status === "COMPLETED").length,
     };
-  }, [vehicles]);
+  }, [orders]);
 
-  const handleChangeStatusSubmit = (status: VehicleStatus, reason: string) => {
-    if (!selectedVehicle) return;
-    updateStatusMutation.mutate(
-      { vehicleId: selectedVehicle.id, status, reason },
+  // Acciones
+  const handleSchedule = (orderId: number) => {
+    scheduleOrderMutation.mutate(
+      { orderId, payload: { scheduledTimelapseDays: 7 } },
       {
         onSuccess: (updated) => {
-          setSelectedVehicle(updated);
-          setIsChangeStatusOpen(false);
-          toast({ title: 'Estado de vehículo actualizado correctamente', type: 'success' });
+          setSelectedOrder(updated);
+          toast({ title: "Orden programada correctamente", type: "success" });
         },
         onError: (err: any) => {
-          toast({ title: err.message || 'Error al cambiar estado', type: 'error' });
+          toast({
+            title: err.message || "Error al programar orden",
+            type: "error",
+          });
         },
-      }
+      },
     );
   };
 
-  const columns = useMemo(
-    () => [
-      columnHelper.accessor('plate', {
-        header: 'Matrícula',
-        cell: (info) => <span className="font-semibold text-slate-900">{info.getValue()}</span>,
-      }),
-      columnHelper.accessor('brand', {
-        header: 'Vehículo / Perfil',
-        cell: (info) => (
-          <div className="flex flex-col">
-            <span className="text-slate-800 font-medium">{info.getValue()} {info.row.original.model}</span>
-            <span className="text-xs text-[#64748B]">{info.row.original.type}</span>
-          </div>
-        ),
-      }),
-      columnHelper.accessor('capacity', {
-        header: 'Capacidad',
-        cell: (info) => <span className="text-slate-600 font-medium">{(info.getValue() / 1000).toFixed(1)} t</span>,
-      }),
-      columnHelper.accessor('status', {
-        header: 'Estado Actual',
-        cell: (info) => {
-          const status = info.getValue();
-          return <Badge className={statusClasses[status]}>{statusLabels[status]}</Badge>;
+  const handleStart = (orderId: number) => {
+    startOrderMutation.mutate(orderId, {
+      onSuccess: (updated) => {
+        setSelectedOrder(updated);
+        toast({ title: "Mantenimiento iniciado", type: "success" });
+      },
+      onError: (err: any) => {
+        toast({
+          title: err.message || "Error al iniciar mantenimiento",
+          type: "error",
+        });
+      },
+    });
+  };
+
+  const handleComplete = (orderId: number, closingOdometer: number) => {
+    completeOrderMutation.mutate(
+      { orderId, payload: { closingOdometer } },
+      {
+        onSuccess: (updated) => {
+          setSelectedOrder(updated);
+          toast({ title: "Mantenimiento completado", type: "success" });
         },
-      }),
-      columnHelper.accessor('lastMaintenance', {
-        header: 'Último Servicio',
-        cell: (info) => <span className="text-slate-650 font-medium text-xs">{info.getValue()}</span>,
-      }),
-      columnHelper.display({
-        id: 'actions',
-        header: 'Acciones',
-        cell: ({ row }) => (
-          <Button
-            variant="ghost"
-            className="h-8 w-8 p-0 text-slate-500"
-            onClick={() => setSelectedVehicle(row.original)}
-            aria-label="Ver detalle e historial"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-        ),
-      }),
-    ],
-    []
-  );
+        onError: (err: any) => {
+          toast({
+            title: err.message || "Error al completar mantenimiento",
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  const handleCancel = (orderId: number, reason: string) => {
+    cancelOrderMutation.mutate(
+      { orderId, payload: { reason } },
+      {
+        onSuccess: (updated) => {
+          setSelectedOrder(updated);
+          toast({ title: "Orden cancelada", type: "success" });
+        },
+        onError: (err: any) => {
+          toast({
+            title: err.message || "Error al cancelar orden",
+            type: "error",
+          });
+        },
+      },
+    );
+  };
+
+  // Tabla
+  const columns = [
+    columnHelper.accessor("id", {
+      header: "ID",
+      cell: (info) => (
+        <span className="font-mono text-sm font-semibold">
+          {info.getValue()}
+        </span>
+      ),
+    }),
+    columnHelper.accessor("vehicleId", {
+      header: "Vehículo",
+      cell: (info) => (
+        <span className="text-sm">Vehículo #{info.getValue()}</span>
+      ),
+    }),
+    columnHelper.accessor("maintenanceType", {
+      header: "Tipo",
+      cell: (info) => (
+        <span className="text-sm">{typeLabels[info.getValue()]}</span>
+      ),
+    }),
+    columnHelper.accessor("priority", {
+      header: "Prioridad",
+      cell: (info) => (
+        <Badge className={priorityClasses[info.getValue()]}>
+          {priorityLabels[info.getValue()]}
+        </Badge>
+      ),
+    }),
+    columnHelper.accessor("status", {
+      header: "Estado",
+      cell: (info) => (
+        <Badge className={statusClasses[info.getValue()]}>
+          {statusLabels[info.getValue()]}
+        </Badge>
+      ),
+    }),
+    columnHelper.accessor("openingOdometer", {
+      header: "Odómetro Inicial",
+      cell: (info) => <span className="text-sm">{info.getValue()} km</span>,
+    }),
+    columnHelper.display({
+      id: "actions",
+      header: "",
+      cell: (info) => (
+        <button
+          onClick={() => setSelectedOrder(info.row.original)}
+          className="text-blue-600 hover:text-blue-900 p-1"
+          title="Ver detalles"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
+      ),
+    }),
+  ];
 
   const table = useReactTable({
-    data: filteredVehicles,
+    data: filteredOrders,
     columns,
     getCoreRowModel: getCoreRowModel(),
   });
 
+  if (ordersQuery.isError) {
+    return (
+      <ApiErrorState
+        title="Error al cargar órdenes de mantenimiento"
+        message="No pudimos cargar las órdenes"
+        onRetry={() => ordersQuery.refetch()}
+      />
+    );
+  }
+
   return (
-    <section className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-950">Mantenimiento de Flota</h1>
-        <p className="mt-2 text-sm text-[#64748B]">Control de inspecciones, cambios de estado operativo e historial mecánico.</p>
-      </div>
+    <div className="min-h-screen bg-slate-50">
+      <PageHeader
+        title="Gestión de Mantenimiento"
+        description="Monitorea y gestiona órdenes de mantenimiento"
+      />
 
-      {/* Tarjetas métricas */}
-      <div className="grid gap-5 md:grid-cols-4">
-        <MetricCard title="Total Vehículos" value={metrics.total} icon={<Truck className="h-5 w-5" />} tone="blue" />
-        <MetricCard title="En Mantenimiento" value={metrics.maintenance} icon={<Wrench className="h-5 w-5" />} tone="amber" />
-        <MetricCard title="Fuera de Servicio" value={metrics.outOfService} icon={<AlertOctagon className="h-5 w-5" />} tone="red" />
-        <MetricCard title="Operativos / Disponibles" value={metrics.operational} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />
-      </div>
-
-      <Card className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="relative w-full lg:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar por placa, marca o modelo..."
-            className="pl-9"
-          />
+      <div className="px-4 md:px-8 py-6 space-y-6">
+        {/* Métricas */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <Card className="p-4">
+            <p className="text-xs text-gray-600 font-medium">Total Órdenes</p>
+            <p className="text-2xl font-bold text-gray-900">{metrics.total}</p>
+          </Card>
+          <Card className="p-4 border-l-4 border-l-slate-500">
+            <p className="text-xs text-gray-600 font-medium">Activas</p>
+            <p className="text-2xl font-bold text-slate-700">
+              {metrics.active}
+            </p>
+          </Card>
+          <Card className="p-4 border-l-4 border-l-blue-500">
+            <p className="text-xs text-gray-600 font-medium">Abiertas</p>
+            <p className="text-2xl font-bold text-blue-700">
+              {metrics.openOrders}
+            </p>
+          </Card>
+          <Card className="p-4 border-l-4 border-l-amber-500">
+            <p className="text-xs text-gray-600 font-medium">En Progreso</p>
+            <p className="text-2xl font-bold text-amber-700">
+              {metrics.inProgress}
+            </p>
+          </Card>
+          <Card className="p-4 border-l-4 border-l-green-500">
+            <p className="text-xs text-gray-600 font-medium">Completadas</p>
+            <p className="text-2xl font-bold text-green-700">
+              {metrics.completed}
+            </p>
+          </Card>
         </div>
-        <div>
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as any)}
-            className="h-10 rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
-          >
-            <option value="all">Todos los estados</option>
-            <option value="operational">Operativo (AVAILABLE)</option>
-            <option value="maintenance">Mantenimiento (MAINTENANCE)</option>
-            <option value="out_of_service">Fuera de servicio (INACTIVE)</option>
-          </select>
-        </div>
-      </Card>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className={`overflow-hidden lg:col-span-2 ${activeSelectedVehicle ? '' : 'lg:col-span-3'}`}>
-          {vehiclesQuery.isLoading ? (
-            <div className="space-y-3 p-5">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
+        {/* Filtros */}
+        <Card className="p-4">
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1">
+              <label
+                htmlFor="search"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Buscar
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                <Input
+                  id="search"
+                  type="text"
+                  placeholder="Buscar por ID, vehículo o tipo..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
             </div>
-          ) : vehiclesQuery.isError ? (
-            <div className="p-5">
-              <ApiErrorState onRetry={() => void vehiclesQuery.refetch()} />
+
+            <div className="w-full md:w-48">
+              <label
+                htmlFor="type-filter"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Tipo
+              </label>
+              <select
+                id="type-filter"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">Todos</option>
+                <option value="PREVENTIVE">Preventivo</option>
+                <option value="CORRECTIVE">Correctivo</option>
+                <option value="PREDICTIVE">Predictivo</option>
+              </select>
             </div>
-          ) : filteredVehicles.length === 0 ? (
-            <div className="p-10 text-center text-sm text-[#64748B] font-medium">
-              No hay vehículos registrados para los filtros seleccionados.
+
+            <div className="w-full md:w-48">
+              <label
+                htmlFor="status-filter"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Estado
+              </label>
+              <select
+                id="status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">Todos</option>
+                <option value="OPEN">Abierto</option>
+                <option value="SCHEDULED">Programado</option>
+                <option value="IN_PROGRESS">En Progreso</option>
+                <option value="COMPLETED">Completado</option>
+                <option value="CANCELLED">Cancelado</option>
+              </select>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <th key={header.id} className="border-b border-[#E2E8F0] px-6 py-4">
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                        </th>
-                      ))}
-                    </tr>
-                  ))}
-                </thead>
-                <tbody>
-                  {table.getRowModel().rows.map((row) => (
-                    <tr key={row.id} className="border-b border-[#E2E8F0] last:border-b-0 hover:bg-slate-50 transition-colors">
+          </div>
+        </Card>
+
+        {/* Tabla */}
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-gray-200">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <tr key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <th
+                        key={header.id}
+                        className="px-6 py-3 text-left font-semibold text-gray-700"
+                      >
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext(),
+                            )}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {ordersQuery.isLoading ? (
+                  <tr>
+                    <td colSpan={columns.length} className="px-6 py-4">
+                      <Skeleton className="h-8 w-full" />
+                    </td>
+                  </tr>
+                ) : filteredOrders.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={columns.length}
+                      className="px-6 py-8 text-center"
+                    >
+                      <AlertTriangle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-600">
+                        No hay órdenes para mostrar
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  table.getRowModel().rows.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50">
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id} className="px-6 py-4">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )}
                         </td>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
+      </div>
 
-        {activeSelectedVehicle && (
-          <Card className="p-5 flex flex-col justify-between h-fit space-y-6">
-            <div className="flex items-start justify-between border-b border-[#E2E8F0] pb-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Unidad #{activeSelectedVehicle.id}</h2>
-                <span className="text-xs text-[#64748B] font-semibold">Placa: {activeSelectedVehicle.plate}</span>
-              </div>
-              <Button
-                variant="ghost"
-                className="h-8 w-8 p-0"
-                onClick={() => setSelectedVehicle(null)}
-                aria-label="Cerrar detalle"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+      {/* Panel lateral de detalles */}
+      {activeSelectedOrder && (
+        <div className="fixed right-0 top-0 h-full w-full md:w-96 bg-white shadow-lg z-40 overflow-y-auto">
+          <div className="p-4 border-b flex justify-between items-center">
+            <h3 className="font-semibold text-lg">Detalles de Orden</h3>
+            <button
+              onClick={() => setSelectedOrder(null)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            <div>
+              <p className="text-xs text-gray-500 font-medium">ID de Orden</p>
+              <p className="text-sm font-mono text-gray-900 mt-1">
+                {activeSelectedOrder.id}
+              </p>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[#64748B] font-semibold block uppercase">Perfil</span>
-                  <span className="text-slate-800 font-semibold text-sm">
-                    {activeSelectedVehicle.brand} {activeSelectedVehicle.model}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[#64748B] font-semibold block uppercase">Capacidad de Carga</span>
-                  <span className="text-slate-800 font-semibold text-sm">
-                    {activeSelectedVehicle.capacity.toLocaleString('es-PE')} kg
-                  </span>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Vehículo</p>
+                <p className="text-sm text-gray-900 mt-1">
+                  #{activeSelectedOrder.vehicleId}
+                </p>
               </div>
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Tipo</p>
+                <p className="text-sm text-gray-900 mt-1">
+                  {typeLabels[activeSelectedOrder.maintenanceType]}
+                </p>
+              </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[#64748B] font-semibold block uppercase">Estado de Flota</span>
-                  <Badge className={`mt-1 ${statusClasses[activeSelectedVehicle.status]}`}>
-                    {statusLabels[activeSelectedVehicle.status]}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Prioridad</p>
+                <div className="mt-2">
+                  <Badge
+                    className={priorityClasses[activeSelectedOrder.priority]}
+                  >
+                    {priorityLabels[activeSelectedOrder.priority]}
                   </Badge>
                 </div>
-                <div>
-                  <span className="text-[#64748B] font-semibold block uppercase">Último Mantenimiento</span>
-                  <div className="flex items-center gap-1 mt-1 text-slate-700">
-                    <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                    <span>{activeSelectedVehicle.lastMaintenance}</span>
-                  </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Estado</p>
+                <div className="mt-2">
+                  <Badge className={statusClasses[activeSelectedOrder.status]}>
+                    {statusLabels[activeSelectedOrder.status]}
+                  </Badge>
                 </div>
               </div>
+            </div>
 
-              {/* Historial de Cambios de Estado */}
-              <div className="border-t border-[#E2E8F0] pt-4">
-                <div className="flex items-center gap-1.5 mb-3 text-[#64748B]">
-                  <History className="h-4 w-4 text-[#2563EB]" />
-                  <span className="font-semibold block uppercase">Historial de Cambios de Estado</span>
+            <div>
+              <p className="text-xs text-gray-500 font-medium">Razón</p>
+              <p className="text-sm text-gray-900 mt-1">
+                {activeSelectedOrder.reason}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-500 font-medium">
+                  Odómetro Inicial
+                </p>
+                <p className="text-sm text-gray-900 mt-1">
+                  {activeSelectedOrder.openingOdometer} km
+                </p>
+              </div>
+              {activeSelectedOrder.closingOdometer && (
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">
+                    Odómetro Final
+                  </p>
+                  <p className="text-sm text-gray-900 mt-1">
+                    {activeSelectedOrder.closingOdometer} km
+                  </p>
                 </div>
-                {historyQuery.isLoading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                ) : history.length === 0 ? (
-                  <p className="text-slate-400 italic">No hay registros de transiciones para esta unidad.</p>
-                ) : (
-                  <div className="relative border-l border-slate-200 pl-4 ml-1 space-y-3.5">
-                    {history.map((log, index) => (
-                      <div key={index} className="relative">
-                        <span className="absolute -left-[20px] top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-white border border-[#E2E8F0]">
-                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+              )}
+            </div>
+
+            {activeSelectedOrder.jobs &&
+              activeSelectedOrder.jobs.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 font-medium">
+                    Trabajos ({activeSelectedOrder.jobs.length})
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {activeSelectedOrder.jobs.map((job) => (
+                      <div
+                        key={job.id}
+                        className="flex items-start gap-2 text-sm"
+                      >
+                        <CheckCircle2
+                          className={`w-4 h-4 mt-0.5 ${job.completed ? "text-green-600" : "text-gray-300"}`}
+                        />
+                        <span
+                          className={
+                            job.completed
+                              ? "text-gray-600 line-through"
+                              : "text-gray-900"
+                          }
+                        >
+                          {job.description}
                         </span>
-                        <div>
-                          <div className="flex items-center justify-between text-[10px] text-[#64748B] mb-0.5">
-                            <Badge className={`px-1 py-0 text-[9px] ${statusClasses[log.status]}`}>
-                              {statusLabels[log.status].split(' ')[0]}
-                            </Badge>
-                            <span>{new Date(log.changedAt).toLocaleDateString('es-PE', { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
-                          <p className="text-slate-700 leading-relaxed font-medium">{log.reason}</p>
-                        </div>
                       </div>
                     ))}
                   </div>
-                )}
+                </div>
+              )}
+
+            {activeSelectedOrder.totalCostAmount && (
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Costo Total</p>
+                <p className="text-sm text-gray-900 mt-1">
+                  {activeSelectedOrder.totalCostAmount}{" "}
+                  {activeSelectedOrder.totalCostCurrency}
+                </p>
               </div>
-            </div>
+            )}
 
-            <div className="pt-4 border-t border-[#E2E8F0]">
-              <Button className="w-full h-10 text-xs" onClick={() => setIsChangeStatusOpen(true)}>
-                Cambiar Estado de la Unidad
-              </Button>
-            </div>
-          </Card>
-        )}
-      </div>
+            <div className="pt-4 border-t space-y-2">
+              {activeSelectedOrder.status === "OPEN" && (
+                <>
+                  <Button
+                    onClick={() => handleSchedule(activeSelectedOrder.id)}
+                    disabled={scheduleOrderMutation.isPending}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    <Clock className="w-4 h-4 mr-2" />
+                    Programar
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      handleCancel(
+                        activeSelectedOrder.id,
+                        "Cancelado por usuario",
+                      )
+                    }
+                    disabled={cancelOrderMutation.isPending}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    Cancelar Orden
+                  </Button>
+                </>
+              )}
 
-      {activeSelectedVehicle && (
-        <ChangeStatusDialog
-          open={isChangeStatusOpen}
-          vehicleId={activeSelectedVehicle.id}
-          currentStatus={activeSelectedVehicle.status}
-          isSubmitting={updateStatusMutation.isPending}
-          onClose={() => setIsChangeStatusOpen(false)}
-          onSubmit={handleChangeStatusSubmit}
-        />
+              {activeSelectedOrder.status === "SCHEDULED" && (
+                <Button
+                  onClick={() => handleStart(activeSelectedOrder.id)}
+                  disabled={startOrderMutation.isPending}
+                  className="w-full"
+                >
+                  <Wrench className="w-4 h-4 mr-2" />
+                  Iniciar Mantenimiento
+                </Button>
+              )}
+
+              {activeSelectedOrder.status === "IN_PROGRESS" && (
+                <Button
+                  onClick={() =>
+                    handleComplete(
+                      activeSelectedOrder.id,
+                      activeSelectedOrder.openingOdometer + 100,
+                    )
+                  }
+                  disabled={completeOrderMutation.isPending}
+                  className="w-full"
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  Completar
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
-    </section>
-  );
-}
-
-type MetricCardProps = {
-  title: string;
-  value: string | number;
-  icon: React.ReactNode;
-  tone: 'green' | 'amber' | 'blue' | 'red';
-};
-
-const metricToneClasses: Record<MetricCardProps['tone'], string> = {
-  green: 'bg-[#DFF6F1] text-[#0F766E]',
-  amber: 'bg-amber-50 text-[#F59E0B]',
-  blue: 'bg-blue-50 text-[#3B82F6]',
-  red: 'bg-red-50 text-[#EF4444]',
-};
-
-function MetricCard({ title, value, icon, tone }: MetricCardProps) {
-  return (
-    <Card className="flex items-center justify-between p-6">
-      <div>
-        <p className="text-sm text-[#64748B]">{title}</p>
-        <p className="mt-3 text-3xl font-bold text-slate-950">{value}</p>
-      </div>
-      <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${metricToneClasses[tone]}`}>{icon}</div>
-    </Card>
+    </div>
   );
 }

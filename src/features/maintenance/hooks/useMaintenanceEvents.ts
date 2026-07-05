@@ -1,43 +1,382 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { maintenanceService } from '../services/maintenanceService';
-import type { VehicleStatus } from '@/modules/fleet.types';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { maintenanceService } from "../services/maintenanceService";
+import type {
+  MaintenanceOrder,
+  MaintenanceSchedule,
+  CreateMaintenanceOrderPayload,
+  ScheduleMaintenanceOrderPayload,
+  CompleteMaintenanceOrderPayload,
+  CancelMaintenanceOrderPayload,
+  RegisterJobPayload,
+  RequestPartsPayload,
+  ReceivePartsPayload,
+  RegisterCostPayload,
+  CreateMaintenanceSchedulePayload,
+  UpdateMaintenanceRulesPayload,
+} from "../types";
 
-export function useMaintenanceVehicles() {
+// ========== MAINTENANCE ORDERS - QUERIES ==========
+
+export function useMaintenanceOrders() {
   return useQuery({
-    queryKey: ['maintenance-vehicles'],
-    queryFn: () => maintenanceService.getVehiclesInMaintenance(),
+    queryKey: ["maintenance-orders"],
+    queryFn: () => maintenanceService.getMaintenanceOrders(),
   });
 }
 
-export function useVehicleStatusHistory(vehicleId: string | undefined) {
+export function useMaintenanceOrderById(orderId: number | undefined) {
   return useQuery({
-    queryKey: ['vehicle-status-history', vehicleId],
-    queryFn: () => {
-      if (!vehicleId) return Promise.resolve([]);
-      return maintenanceService.getVehicleStatusHistory(vehicleId);
+    queryKey: ["maintenance-orders", orderId],
+    queryFn: () => maintenanceService.getMaintenanceOrderById(orderId!),
+    enabled: !!orderId,
+  });
+}
+
+export function useMaintenanceOrdersByStatus(status: string) {
+  return useQuery({
+    queryKey: ["maintenance-orders", "status", status],
+    queryFn: () => maintenanceService.getMaintenanceOrdersByStatus(status),
+  });
+}
+
+export function useOpenMaintenanceOrdersByVehicle(
+  vehicleId: number | undefined,
+) {
+  return useQuery({
+    queryKey: ["maintenance-orders", "vehicle", vehicleId, "open"],
+    queryFn: () =>
+      maintenanceService.getOpenMaintenanceOrdersByVehicle(vehicleId!),
+    enabled: !!vehicleId,
+  });
+}
+
+export function useMaintenanceOrderHistory(vehicleId: number | undefined) {
+  return useQuery({
+    queryKey: ["maintenance-orders", "vehicle", vehicleId, "history"],
+    queryFn: () => maintenanceService.getMaintenanceOrderHistory(vehicleId!),
+    enabled: !!vehicleId,
+  });
+}
+
+// ========== MAINTENANCE ORDERS - MUTATIONS ==========
+
+export function useCreateMaintenanceOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: CreateMaintenanceOrderPayload) =>
+      maintenanceService.createMaintenanceOrder(payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["maintenance-orders"] });
     },
-    enabled: Boolean(vehicleId),
   });
 }
 
-export function useUpdateVehicleStatus() {
+export function useScheduleMaintenanceOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({
-      vehicleId,
-      status,
-      reason,
+      orderId,
+      payload,
     }: {
-      vehicleId: string;
-      status: VehicleStatus;
-      reason: string;
-    }) => maintenanceService.updateVehicleStatus(vehicleId, status, reason),
-    onSuccess: (updatedVehicle) => {
-      // Invalidate queries to reload all vehicle lists
-      void queryClient.invalidateQueries({ queryKey: ['maintenance-vehicles'] });
-      void queryClient.invalidateQueries({ queryKey: ['vehicles'] });
-      void queryClient.invalidateQueries({ queryKey: ['vehicle-status-history', updatedVehicle.id] });
+      orderId: number;
+      payload: ScheduleMaintenanceOrderPayload;
+    }) => maintenanceService.scheduleMaintenanceOrder(orderId, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceOrder[]>(
+        ["maintenance-orders"],
+        (current) =>
+          (current ?? []).map((order) =>
+            order.id === updated.id ? updated : order,
+          ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["maintenance-orders"] });
+    },
+  });
+}
+
+export function useStartMaintenanceOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (orderId: number) =>
+      maintenanceService.startMaintenanceOrder(orderId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceOrder[]>(
+        ["maintenance-orders"],
+        (current) =>
+          (current ?? []).map((order) =>
+            order.id === updated.id ? updated : order,
+          ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["maintenance-orders"] });
+    },
+  });
+}
+
+export function useCompleteMaintenanceOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      payload,
+    }: {
+      orderId: number;
+      payload: CompleteMaintenanceOrderPayload;
+    }) => maintenanceService.completeMaintenanceOrder(orderId, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceOrder[]>(
+        ["maintenance-orders"],
+        (current) =>
+          (current ?? []).map((order) =>
+            order.id === updated.id ? updated : order,
+          ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["maintenance-orders"] });
+    },
+  });
+}
+
+export function useCancelMaintenanceOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      payload,
+    }: {
+      orderId: number;
+      payload: CancelMaintenanceOrderPayload;
+    }) => maintenanceService.cancelMaintenanceOrder(orderId, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceOrder[]>(
+        ["maintenance-orders"],
+        (current) =>
+          (current ?? []).map((order) =>
+            order.id === updated.id ? updated : order,
+          ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["maintenance-orders"] });
+    },
+  });
+}
+
+export function useRegisterJob() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      payload,
+    }: {
+      orderId: number;
+      payload: RegisterJobPayload;
+    }) => maintenanceService.registerJob(orderId, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceOrder[]>(
+        ["maintenance-orders"],
+        (current) =>
+          (current ?? []).map((order) =>
+            order.id === updated.id ? updated : order,
+          ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["maintenance-orders"] });
+    },
+  });
+}
+
+export function useRequestParts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      payload,
+    }: {
+      orderId: number;
+      payload: RequestPartsPayload;
+    }) => maintenanceService.requestParts(orderId, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceOrder[]>(
+        ["maintenance-orders"],
+        (current) =>
+          (current ?? []).map((order) =>
+            order.id === updated.id ? updated : order,
+          ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["maintenance-orders"] });
+    },
+  });
+}
+
+export function useReceiveParts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      payload,
+    }: {
+      orderId: number;
+      payload: ReceivePartsPayload;
+    }) => maintenanceService.receiveParts(orderId, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceOrder[]>(
+        ["maintenance-orders"],
+        (current) =>
+          (current ?? []).map((order) =>
+            order.id === updated.id ? updated : order,
+          ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["maintenance-orders"] });
+    },
+  });
+}
+
+export function useRegisterCost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      payload,
+    }: {
+      orderId: number;
+      payload: RegisterCostPayload;
+    }) => maintenanceService.registerCost(orderId, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceOrder[]>(
+        ["maintenance-orders"],
+        (current) =>
+          (current ?? []).map((order) =>
+            order.id === updated.id ? updated : order,
+          ),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["maintenance-orders"] });
+    },
+  });
+}
+
+// ========== MAINTENANCE SCHEDULES - QUERIES ==========
+
+export function useMaintenanceSchedules() {
+  return useQuery({
+    queryKey: ["maintenance-schedules"],
+    queryFn: () => maintenanceService.getMaintenanceSchedules(),
+  });
+}
+
+export function useMaintenanceScheduleById(scheduleId: number | undefined) {
+  return useQuery({
+    queryKey: ["maintenance-schedules", scheduleId],
+    queryFn: () => maintenanceService.getMaintenanceScheduleById(scheduleId!),
+    enabled: !!scheduleId,
+  });
+}
+
+// ========== MAINTENANCE SCHEDULES - MUTATIONS ==========
+
+export function useCreateMaintenanceSchedule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: CreateMaintenanceSchedulePayload) =>
+      maintenanceService.createMaintenanceSchedule(payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["maintenance-schedules"],
+      });
+    },
+  });
+}
+
+export function useActivateMaintenanceSchedule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (scheduleId: number) =>
+      maintenanceService.activateMaintenanceSchedule(scheduleId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceSchedule[]>(
+        ["maintenance-schedules"],
+        (current) =>
+          (current ?? []).map((schedule) =>
+            schedule.id === updated.id ? updated : schedule,
+          ),
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["maintenance-schedules"],
+      });
+    },
+  });
+}
+
+export function useDeactivateMaintenanceSchedule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (scheduleId: number) =>
+      maintenanceService.deactivateMaintenanceSchedule(scheduleId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceSchedule[]>(
+        ["maintenance-schedules"],
+        (current) =>
+          (current ?? []).map((schedule) =>
+            schedule.id === updated.id ? updated : schedule,
+          ),
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["maintenance-schedules"],
+      });
+    },
+  });
+}
+
+export function useEvaluateMaintenanceSchedule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (scheduleId: number) =>
+      maintenanceService.evaluateMaintenanceSchedule(scheduleId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceSchedule[]>(
+        ["maintenance-schedules"],
+        (current) =>
+          (current ?? []).map((schedule) =>
+            schedule.id === updated.id ? updated : schedule,
+          ),
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["maintenance-schedules"],
+      });
+    },
+  });
+}
+
+export function useUpdateMaintenanceRules() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      scheduleId,
+      payload,
+    }: {
+      scheduleId: number;
+      payload: UpdateMaintenanceRulesPayload;
+    }) => maintenanceService.updateMaintenanceRules(scheduleId, payload),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<MaintenanceSchedule[]>(
+        ["maintenance-schedules"],
+        (current) =>
+          (current ?? []).map((schedule) =>
+            schedule.id === updated.id ? updated : schedule,
+          ),
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["maintenance-schedules"],
+      });
     },
   });
 }

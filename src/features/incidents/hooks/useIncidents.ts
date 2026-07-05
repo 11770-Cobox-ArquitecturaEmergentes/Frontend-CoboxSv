@@ -1,66 +1,124 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { incidentsService } from '../services/incidentsService';
-import type { CreateIncidentPayload, ResolveIncidentPayload, Incident, IncidentStatus } from '../types';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { incidentsService } from "../services/incidentsService";
+import type {
+  Incident,
+  CreateIncidentPayload,
+  UpdateIncidentStatusPayload,
+  AssignResponsiblePayload,
+  IncidentStatus,
+} from "../types";
 
+/**
+ * Hook para obtener todas las incidencias
+ */
 export function useIncidents() {
   return useQuery({
-    queryKey: ['incidents'],
+    queryKey: ["incidents"],
     queryFn: () => incidentsService.getIncidents(),
   });
 }
 
+/**
+ * Hook para obtener una incidencia por su ID (incidentId del backend)
+ */
+export function useIncidentById(incidentId: string | undefined) {
+  return useQuery({
+    queryKey: ["incidents", incidentId],
+    queryFn: () => incidentsService.getIncidentById(incidentId!),
+    enabled: !!incidentId,
+  });
+}
+
+/**
+ * Hook para crear una nueva incidencia
+ */
 export function useCreateIncident() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: CreateIncidentPayload) => incidentsService.createIncident(payload),
+    mutationFn: (payload: CreateIncidentPayload) =>
+      incidentsService.createIncident(payload),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
     },
   });
 }
 
+/**
+ * Hook para actualizar el estado de una incidencia
+ */
 export function useUpdateIncidentStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, status, note }: { id: string; status: IncidentStatus; note?: string }) =>
-      incidentsService.updateStatus(id, status, note),
+    mutationFn: ({
+      incidentId,
+      payload,
+    }: {
+      incidentId: string;
+      payload: UpdateIncidentStatusPayload;
+    }) => incidentsService.updateStatus(incidentId, payload),
     onSuccess: (updated) => {
-      queryClient.setQueryData<Incident[]>(['incidents'], (current) =>
-        (current ?? []).map((inc) => (inc.id === updated.id ? updated : inc)),
+      // Actualización optimista
+      queryClient.setQueryData<Incident[]>(["incidents"], (current) =>
+        (current ?? []).map((incident) =>
+          incident.incidentId === updated.incidentId ? updated : incident,
+        ),
       );
-      void queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
     },
   });
 }
 
-export function useResolveIncident() {
+/**
+ * Hook para asignar un responsable a una incidencia
+ */
+export function useAssignResponsible() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: ResolveIncidentPayload }) =>
-      incidentsService.resolveIncident(id, payload),
+    mutationFn: ({
+      incidentId,
+      payload,
+    }: {
+      incidentId: string;
+      payload: AssignResponsiblePayload;
+    }) => incidentsService.assignResponsible(incidentId, payload),
     onSuccess: (updated) => {
-      queryClient.setQueryData<Incident[]>(['incidents'], (current) =>
-        (current ?? []).map((inc) => (inc.id === updated.id ? updated : inc)),
+      // Actualización optimista
+      queryClient.setQueryData<Incident[]>(["incidents"], (current) =>
+        (current ?? []).map((incident) =>
+          incident.incidentId === updated.incidentId ? updated : incident,
+        ),
       );
-      void queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      void queryClient.invalidateQueries({ queryKey: ["incidents"] });
     },
   });
 }
 
-export function useAssociateEvidence() {
-  const queryClient = useQueryClient();
+/**
+ * Hook combinado para obtener y actualizar incidencias
+ * Útil para componentes que necesitan múltiples operaciones
+ */
+export function useIncidentsManager() {
+  const incidents = useIncidents();
+  const createMutation = useCreateIncident();
+  const updateStatusMutation = useUpdateIncidentStatus();
+  const assignMutation = useAssignResponsible();
 
-  return useMutation({
-    mutationFn: ({ id, evidenceId }: { id: string; evidenceId: string }) =>
-      incidentsService.associateEvidence(id, evidenceId),
-    onSuccess: (updated) => {
-      queryClient.setQueryData<Incident[]>(['incidents'], (current) =>
-        (current ?? []).map((inc) => (inc.id === updated.id ? updated : inc)),
-      );
-      void queryClient.invalidateQueries({ queryKey: ['incidents'] });
-    },
-  });
+  return {
+    incidents: incidents.data ?? [],
+    isLoading:
+      incidents.isLoading ||
+      createMutation.isPending ||
+      updateStatusMutation.isPending ||
+      assignMutation.isPending,
+    isError: incidents.isError,
+    error: incidents.error,
+
+    // Métodos
+    create: createMutation.mutateAsync,
+    updateStatus: updateStatusMutation.mutateAsync,
+    assignResponsible: assignMutation.mutateAsync,
+  };
 }

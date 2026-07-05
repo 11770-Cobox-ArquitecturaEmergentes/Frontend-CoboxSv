@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Button, Dialog, Input } from '@/components/ui';
-import type { IncidentType, IncidentSeverity, CreateIncidentPayload } from '../types';
+import { useState } from "react";
+import { Button, Dialog, Input, Select } from "@/components/ui";
+import type { CreateIncidentPayload, IncidentSeverity } from "../types";
 
 type CreateIncidentDialogProps = {
   open: boolean;
@@ -9,123 +9,166 @@ type CreateIncidentDialogProps = {
   onSubmit: (payload: CreateIncidentPayload) => void;
 };
 
-export function CreateIncidentDialog({ open, isSubmitting, onClose, onSubmit }: CreateIncidentDialogProps) {
-  const [serviceReference, setServiceReference] = useState('');
-  const [reporterReference, setReporterReference] = useState('Conductor Central');
-  const [type, setType] = useState<IncidentType>('DELIVERY_ISSUE');
-  const [severity, setSeverity] = useState<IncidentSeverity>('MEDIUM');
-  const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('');
+export function CreateIncidentDialog({
+  open,
+  isSubmitting,
+  onClose,
+  onSubmit,
+}: CreateIncidentDialogProps) {
+  const [type, setType] = useState("");
+  const [description, setDescription] = useState("");
+  const [severity, setSeverity] = useState<IncidentSeverity>("MEDIUM");
+  const [responsibleUserId, setResponsibleUserId] = useState<number | "">("");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!serviceReference.trim()) {
-      setError('El ID del servicio/orden es obligatorio');
+
+    // Validaciones
+    if (!type.trim()) {
+      setError("El tipo de incidencia es obligatorio");
+      return;
+    }
+    if (type.length > 255) {
+      setError("El tipo no puede exceder 255 caracteres");
       return;
     }
     if (!description.trim()) {
-      setError('La descripción del incidente es obligatoria');
+      setError("La descripción es obligatoria");
       return;
     }
-    if (!location.trim()) {
-      setError('La ubicación del incidente es obligatoria');
+    if (description.length < 5) {
+      setError("La descripción debe tener al menos 5 caracteres");
+      return;
+    }
+    if (description.length > 2000) {
+      setError("La descripción no puede exceder 2000 caracteres");
+      return;
+    }
+    if (!responsibleUserId || typeof responsibleUserId !== "number") {
+      setError("Debe especificar un usuario responsable");
       return;
     }
 
     setError(null);
     onSubmit({
-      serviceReference: serviceReference.trim(),
-      reporterReference: reporterReference.trim(),
-      type,
-      severity,
+      type: type.trim(),
       description: description.trim(),
-      location: location.trim(),
+      severity,
+      responsibleUserId: responsibleUserId as number,
     });
+
+    // Reset form
+    setType("");
+    setDescription("");
+    setSeverity("MEDIUM");
+    setResponsibleUserId("");
   };
 
   return (
     <Dialog open={open} title="Reportar Nueva Incidencia" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {error && <p className="text-sm font-medium text-[#DC2626] bg-red-50 p-2.5 rounded-lg">{error}</p>}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Orden / Servicio Relacionado (ID)</label>
-            <Input
-              value={serviceReference}
-              onChange={(e) => setServiceReference(e.target.value)}
-              placeholder="Ej. 1"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Conductor Reportante</label>
-            <Input
-              value={reporterReference}
-              onChange={(e) => setReporterReference(e.target.value)}
-              placeholder="Ej. Conductor #1"
-              required
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Tipo de Incidencia</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as IncidentType)}
-              className="mt-1 block w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
-            >
-              <option value="ACCIDENT">Accidente</option>
-              <option value="BREAKDOWN">Avería Mecánica</option>
-              <option value="ROAD_BLOCK">Bloqueo de Vía</option>
-              <option value="DELIVERY_ISSUE">Problema de Entrega</option>
-              <option value="OTHER">Otro</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">Severidad</label>
-            <select
-              value={severity}
-              onChange={(e) => setSeverity(e.target.value as IncidentSeverity)}
-              className="mt-1 block w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none"
-            >
-              <option value="LOW">Baja (LOW)</option>
-              <option value="MEDIUM">Media (MEDIUM)</option>
-              <option value="HIGH">Alta (HIGH)</option>
-            </select>
-          </div>
-        </div>
+        {error && (
+          <p className="text-sm font-medium text-[#DC2626] bg-red-50 p-2.5 rounded-lg">
+            {error}
+          </p>
+        )}
 
         <div>
-          <label className="block text-sm font-medium text-slate-700">Ubicación</label>
+          <label
+            htmlFor="type"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Tipo de Incidencia
+          </label>
           <Input
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="Ej. Av. Larco 450, Miraflores"
-            required
+            id="type"
+            type="text"
+            placeholder="ej: Equipment Failure, Delivery Delay"
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            maxLength={255}
+            disabled={isSubmitting}
           />
+          <p className="text-xs text-gray-500 mt-1">{type.length}/255</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700">Descripción detallada</label>
+          <label
+            htmlFor="description"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Descripción
+          </label>
           <textarea
+            id="description"
+            placeholder="Describa detalladamente el incidente..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Especifica detalladamente lo sucedido..."
-            className="mt-1 block w-full rounded-lg border border-[#E2E8F0] px-3 py-2 text-sm focus:border-[#2563EB] focus:outline-none min-h-[80px]"
-            required
+            maxLength={2000}
+            disabled={isSubmitting}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            rows={4}
           />
+          <p className="text-xs text-gray-500 mt-1">
+            {description.length}/2000
+          </p>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-[#E2E8F0]">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label
+              htmlFor="severity"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Severidad
+            </label>
+            <Select
+              value={severity}
+              onValueChange={(value) => setSeverity(value as IncidentSeverity)}
+              disabled={isSubmitting}
+            >
+              <option value="LOW">Baja</option>
+              <option value="MEDIUM">Media</option>
+              <option value="HIGH">Alta</option>
+              <option value="CRITICAL">Crítica</option>
+            </Select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="responsibleUserId"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Usuario Responsable (ID)
+            </label>
+            <Input
+              id="responsibleUserId"
+              type="number"
+              placeholder="ej: 123"
+              value={responsibleUserId}
+              onChange={(e) =>
+                setResponsibleUserId(
+                  e.target.value ? parseInt(e.target.value) : "",
+                )
+              }
+              disabled={isSubmitting}
+              min={1}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isSubmitting}
+          >
             Cancelar
           </Button>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Reportando...' : 'Reportar Incidente'}
+            {isSubmitting ? "Reportando..." : "Reportar Incidencia"}
           </Button>
         </div>
       </form>
