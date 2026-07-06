@@ -1,11 +1,10 @@
 import axios from 'axios';
+import { getAccessToken } from '@/lib';
 import type {
   CreateTicketPayload,
   Ticket,
   UpdateTicketPayload,
 } from '@/modules/support/types';
-
-const TOKEN_KEY = 'cobox_token';
 
 export const supportApi = axios.create({
   baseURL: import.meta.env.VITE_SUPPORT_API_URL ?? 'http://localhost:8084',
@@ -13,13 +12,9 @@ export const supportApi = axios.create({
   validateStatus: (status) => status < 400,
 });
 
-supportApi.interceptors.request.use((config) => {
-  try {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-  } catch {
-    /* ignore */
-  }
+supportApi.interceptors.request.use(async (config) => {
+  const token = await getAccessToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 

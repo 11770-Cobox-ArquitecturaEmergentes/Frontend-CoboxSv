@@ -5,8 +5,7 @@ import { Provider } from 'react-redux'
 import './index.css'
 import App from './App.tsx'
 import { store } from './store'
-import { AppProviders } from './app/providers'
-import { Auth0ProviderWithNavigate } from './app/providers'
+import { AppProviders, Auth0ProviderWithNavigate, Auth0TokenBridge } from './app/providers'
 
 const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN as string
 const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID as string
@@ -22,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
             clientId={auth0ClientId}
             audience={auth0Audience}
           >
-            <App />
+            <Auth0TokenBridge>
+              <App />
+            </Auth0TokenBridge>
           </Auth0ProviderWithNavigate>
         </BrowserRouter>
       </AppProviders>

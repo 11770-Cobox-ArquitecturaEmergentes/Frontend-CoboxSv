@@ -5,7 +5,6 @@ import type {
   CreateIncidentPayload,
   UpdateIncidentStatusPayload,
   AssignResponsiblePayload,
-  IncidentStatus,
 } from "../types";
 
 /**

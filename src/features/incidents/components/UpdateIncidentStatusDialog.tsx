@@ -73,7 +73,7 @@ export function UpdateIncidentStatusDialog({
             </label>
             <Select
               value={newStatus}
-              onValueChange={(value) => setNewStatus(value as IncidentStatus)}
+              onChange={(e) => setNewStatus(e.target.value as IncidentStatus)}
               disabled={isSubmitting}
             >
               <option value="">Seleccionar estado...</option>
@@ -89,7 +89,7 @@ export function UpdateIncidentStatusDialog({
         <div className="flex justify-end gap-2 pt-4">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={onClose}
             disabled={isSubmitting}
           >

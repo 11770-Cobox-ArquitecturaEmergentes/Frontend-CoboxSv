@@ -13,7 +13,6 @@ import {
   Search,
   X,
   User,
-  Settings2,
 } from "lucide-react";
 import {
   Badge,
@@ -507,7 +506,7 @@ export function IncidentsPage() {
               <Button
                 onClick={() => setIsStatusOpen(true)}
                 className="w-full"
-                variant="outline"
+                variant="secondary"
               >
                 <Clock className="w-4 h-4 mr-2" />
                 Cambiar Estado
@@ -515,7 +514,7 @@ export function IncidentsPage() {
               <Button
                 onClick={() => setIsAssignOpen(true)}
                 className="w-full"
-                variant="outline"
+                variant="secondary"
               >
                 <User className="w-4 h-4 mr-2" />
                 Asignar Responsable

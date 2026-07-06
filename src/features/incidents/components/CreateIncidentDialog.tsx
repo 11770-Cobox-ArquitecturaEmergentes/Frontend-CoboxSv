@@ -125,7 +125,7 @@ export function CreateIncidentDialog({
             </label>
             <Select
               value={severity}
-              onValueChange={(value) => setSeverity(value as IncidentSeverity)}
+              onChange={(e) => setSeverity(e.target.value as IncidentSeverity)}
               disabled={isSubmitting}
             >
               <option value="LOW">Baja</option>
@@ -161,7 +161,7 @@ export function CreateIncidentDialog({
         <div className="flex justify-end gap-2 pt-4">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             onClick={onClose}
             disabled={isSubmitting}
           >

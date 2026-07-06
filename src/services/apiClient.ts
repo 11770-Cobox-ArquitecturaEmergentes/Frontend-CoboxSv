@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAccessToken } from '@/lib';
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost',
@@ -6,10 +7,8 @@ export const apiClient = axios.create({
   validateStatus: (status) => status < 400,
 });
 
-apiClient.interceptors.request.use((config) => {
-  try {
-    const token = localStorage.getItem('cobox_token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-  } catch { /* ignore */ }
+apiClient.interceptors.request.use(async (config) => {
+  const token = await getAccessToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });

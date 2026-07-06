@@ -8,7 +8,6 @@ import {
 import {
   Wrench,
   Search,
-  Plus,
   Eye,
   X,
   Clock,
@@ -27,7 +26,6 @@ import { ApiErrorState } from "@/components/shared";
 import { PageHeader } from "@/components/common";
 import {
   useMaintenanceOrders,
-  useCreateMaintenanceOrder,
   useScheduleMaintenanceOrder,
   useStartMaintenanceOrder,
   useCompleteMaintenanceOrder,
@@ -105,7 +103,7 @@ export function MaintenancePage() {
       const matchesSearch =
         order.id.toString().includes(term) ||
         order.vehicleId.toString().includes(term) ||
-        order.type?.toLowerCase().includes(term) ||
+        order.maintenanceType?.toLowerCase().includes(term) ||
         order.reason?.toLowerCase().includes(term);
       const matchesStatus =
         statusFilter === "all" || order.status === statusFilter;
@@ -578,7 +576,7 @@ export function MaintenancePage() {
                     onClick={() => handleSchedule(activeSelectedOrder.id)}
                     disabled={scheduleOrderMutation.isPending}
                     className="w-full"
-                    variant="outline"
+                    variant="secondary"
                   >
                     <Clock className="w-4 h-4 mr-2" />
                     Programar
@@ -592,7 +590,7 @@ export function MaintenancePage() {
                     }
                     disabled={cancelOrderMutation.isPending}
                     className="w-full"
-                    variant="outline"
+                    variant="secondary"
                   >
                     Cancelar Orden
                   </Button>

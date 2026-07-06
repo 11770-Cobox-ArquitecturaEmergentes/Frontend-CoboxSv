@@ -11,19 +11,13 @@ import type {
 export const createMaintenanceOrderSchema = z.object({
   vehicleId: z.number().int().positive("El ID del vehículo debe ser positivo"),
   maintenanceType: z.enum(["PREVENTIVE", "CORRECTIVE", "PREDICTIVE"] as const, {
-    errorMap: () => ({
-      message: "El tipo debe ser PREVENTIVE, CORRECTIVE o PREDICTIVE",
-    }),
+    error: "El tipo debe ser PREVENTIVE, CORRECTIVE o PREDICTIVE",
   }) as z.ZodType<MaintenanceType>,
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const, {
-    errorMap: () => ({
-      message: "La prioridad debe ser LOW, MEDIUM, HIGH o CRITICAL",
-    }),
+    error: "La prioridad debe ser LOW, MEDIUM, HIGH o CRITICAL",
   }) as z.ZodType<MaintenancePriority>,
   reason: z.enum(["SCHEDULED", "BREAKDOWN", "INSPECTION", "OTHER"] as const, {
-    errorMap: () => ({
-      message: "La razón debe ser SCHEDULED, BREAKDOWN, INSPECTION u OTHER",
-    }),
+    error: "La razón debe ser SCHEDULED, BREAKDOWN, INSPECTION u OTHER",
   }) as z.ZodType<MaintenanceReason>,
   openingOdometer: z.number().positive("El odómetro debe ser positivo"),
   scheduledTimelapseDays: z

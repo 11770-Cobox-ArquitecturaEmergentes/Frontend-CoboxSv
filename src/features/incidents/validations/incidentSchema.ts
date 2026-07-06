@@ -15,9 +15,7 @@ export const createIncidentSchema = z.object({
     .min(5, "La descripción debe tener al menos 5 caracteres")
     .max(2000, "La descripción no puede exceder 2000 caracteres"),
   severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const, {
-    errorMap: () => ({
-      message: "La severidad debe ser LOW, MEDIUM, HIGH o CRITICAL",
-    }),
+    error: "La severidad debe ser LOW, MEDIUM, HIGH o CRITICAL",
   }) as z.ZodType<IncidentSeverity>,
   responsibleUserId: z
     .number()
@@ -32,10 +30,8 @@ export const updateIncidentStatusSchema = z.object({
   status: z.enum(
     ["OPEN", "IN_PROGRESS", "ESCALATED", "RESOLVED", "CLOSED"] as const,
     {
-      errorMap: () => ({
-        message:
-          "El estado debe ser OPEN, IN_PROGRESS, ESCALATED, RESOLVED o CLOSED",
-      }),
+      error:
+        "El estado debe ser OPEN, IN_PROGRESS, ESCALATED, RESOLVED o CLOSED",
     },
   ) as z.ZodType<IncidentStatus>,
 });
