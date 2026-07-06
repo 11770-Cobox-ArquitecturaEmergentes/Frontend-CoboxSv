@@ -3,6 +3,7 @@ import {
   BarChart3,
   BrainCircuit,
   LayoutDashboard,
+  LifeBuoy,
   Map,
   Package,
   Truck,
@@ -20,4 +21,5 @@ export const sidebarItems = [
   { label: 'Incidentes', path: '/incidents', icon: AlertTriangle },
   { label: 'Mantenimiento', path: '/maintenance', icon: Wrench },
   { label: 'Reportes', path: '/reports', icon: BarChart3 },
+  { label: 'Soporte Técnico', path: '/support', icon: LifeBuoy },
 ] as const;
