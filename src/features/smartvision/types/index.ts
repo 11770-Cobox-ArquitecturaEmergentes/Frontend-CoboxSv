@@ -2,6 +2,45 @@ import type { LucideIcon } from 'lucide-react';
 
 export type KpiColor = 'green' | 'orange' | 'red' | 'default';
 
+export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
+export type AlertStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+export type AnalysisStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'REVIEW_REQUIRED'
+  | 'RECAPTURE_REQUIRED'
+  | 'FRAUD_SUSPECTED'
+  | 'DEGRADED';
+
+export type AiAlert = {
+  alertId: string;
+  clientEvidenceId: string;
+  type: string;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  message: string;
+  createdAt: string;
+};
+
+export type EvidenceAnalysis = {
+  clientEvidenceId: string;
+  objectKey: string;
+  driverId: number | null;
+  orderId: number | null;
+  routeId: number | null;
+  evidenceType: string | null;
+  status: AnalysisStatus;
+  provider: string | null;
+  confidenceScore: number | null;
+  fraudScore: number | null;
+  validationSummary: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  completedAt: string | null;
+};
+
 export type KpiData = {
   id: string;
   title: string;
@@ -37,6 +76,6 @@ export type Category = {
 
 export type DashboardData = {
   kpis: KpiData[];
-  incidents: Incident[];
+  alerts: AiAlert[];
   categories: Category[];
 };
