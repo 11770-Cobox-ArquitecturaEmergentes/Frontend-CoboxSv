@@ -4,10 +4,10 @@ import { AuthLayout, DashboardLayout, DriverLayout } from '@/components/layouts'
 import { LoginPage, RegisterPage } from '@/features/auth';
 import { DashboardPage } from '@/features/dashboard';
 import { SmartVisionPage } from '@/features/smartvision';
-import { VehiclesPage } from '@/modules/vehicles';
-import { DriversPage } from '@/modules/drivers';
+import { VehiclesPage } from '@/features/vehicles';
+import { DriversPage } from '@/features/drivers';
 import { OrdersPage } from '@/features/orders';
-import { RoutesPage } from '@/modules/routes';
+import { RoutesPage } from '@/features/routes';
 import { IncidentsPage } from '@/features/incidents';
 import { MaintenancePage } from '@/features/maintenance';
 import { ReportsPage } from '@/features/reports';

@@ -1,3 +1,5 @@
+import { useDashboardOperations } from './useDashboardOperations';
+
 export function useDashboardSummary() {
-  return { data: null, isLoading: false };
+  return useDashboardOperations();
 }
