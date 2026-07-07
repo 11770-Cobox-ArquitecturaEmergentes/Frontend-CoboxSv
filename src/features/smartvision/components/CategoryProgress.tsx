@@ -19,6 +19,14 @@ type CategoryProgressProps = {
 };
 
 export function CategoryProgress({ categories }: CategoryProgressProps) {
+  if (categories.length === 0) {
+    return (
+      <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-[#E5E7EB] px-4 text-center text-sm text-[#6B7280]">
+        Sin categorias detectadas.
+      </div>
+    );
+  }
+
   const maxCount = Math.max(...categories.map((c) => c.count));
 
   return (
