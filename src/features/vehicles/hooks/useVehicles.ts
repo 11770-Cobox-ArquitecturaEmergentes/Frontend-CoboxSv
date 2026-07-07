@@ -17,6 +17,14 @@ export function useVehicle(vehicleId?: string) {
   });
 }
 
+export function useVehicleHealth(vehicleId?: string) {
+  return useQuery({
+    queryKey: ['vehicles', 'health', vehicleId],
+    queryFn: () => vehiclesService.getVehicleHealth(vehicleId as string),
+    enabled: Boolean(vehicleId),
+  });
+}
+
 export function useCreateVehicle() {
   const queryClient = useQueryClient();
 

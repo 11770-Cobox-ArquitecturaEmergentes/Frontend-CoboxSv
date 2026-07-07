@@ -1,3 +1,4 @@
+import { isAxiosError } from "axios";
 import { fleetApi } from "@/services";
 import type {
   BackendIncidentResource,
@@ -20,6 +21,9 @@ function toIncident(backend: BackendIncidentResource): Incident {
     severity: backend.severity,
     status: backend.status,
     responsibleUserId: backend.responsibleUserId,
+    sourceType: backend.sourceType,
+    sourceAlertId: backend.sourceAlertId,
+    sourceClientEvidenceId: backend.sourceClientEvidenceId,
   };
 }
 
@@ -80,6 +84,18 @@ export const incidentsService = {
       payload,
     );
     return toIncident(data);
+  },
+
+  async getBySourceAiAlert(alertId: string): Promise<Incident | null> {
+    try {
+      const { data } = await fleetApi.get<BackendIncidentResource>(
+        `/api/v1/incidents/source/ai-alert/${alertId}`,
+      );
+      return toIncident(data);
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 404) return null;
+      throw error;
+    }
   },
 };
 

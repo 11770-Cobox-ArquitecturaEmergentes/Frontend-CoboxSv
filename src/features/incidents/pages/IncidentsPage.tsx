@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   createColumnHelper,
   flexRender,
@@ -26,11 +27,18 @@ import { ApiErrorState } from "@/components/shared";
 import { PageHeader } from "@/components/common";
 import {
   useIncidents,
+  useIncidentBySourceAlert,
   useCreateIncident,
   useUpdateIncidentStatus,
   useAssignResponsible,
 } from "../hooks";
-import type { Incident, IncidentSeverity, IncidentStatus } from "../types";
+import type {
+  AssignResponsiblePayload,
+  CreateIncidentPayload,
+  Incident,
+  IncidentSeverity,
+  IncidentStatus,
+} from "../types";
 import {
   IncidentSeverityBadge,
   UpdateIncidentStatusDialog,
@@ -57,6 +65,13 @@ const statusClasses: Record<IncidentStatus, string> = {
 };
 
 export function IncidentsPage() {
+  const [searchParams] = useSearchParams();
+  const sourceAlertId = searchParams.get("sourceAlertId");
+  const navigate = useNavigate();
+  const sourceIncidentQuery = useIncidentBySourceAlert(
+    sourceAlertId ?? undefined,
+  );
+
   const [search, setSearch] = useState("");
   const [severityFilter, setSeverityFilter] = useState<
     "all" | IncidentSeverity
@@ -109,6 +124,14 @@ export function IncidentsPage() {
     );
   }, [incidents, selectedIncident]);
 
+  useEffect(() => {
+    if (selectedIncident) return;
+    const source = sourceIncidentQuery.data;
+    if (!source || !source.incidentId) return;
+    const match = incidents.find((i) => i.incidentId === source.incidentId);
+    if (match) setSelectedIncident(match);
+  }, [sourceIncidentQuery.data, incidents, selectedIncident]);
+
   // Contadores por severidad
   const severityMetrics = useMemo(() => {
     const active = incidents.filter(
@@ -123,15 +146,15 @@ export function IncidentsPage() {
     };
   }, [incidents]);
 
-  const handleCreateSubmit = (payload: any) => {
+  const handleCreateSubmit = (payload: CreateIncidentPayload) => {
     createIncidentMutation.mutate(payload, {
       onSuccess: () => {
         setIsCreateOpen(false);
         toast({ title: "Incidencia reportada correctamente", type: "success" });
       },
-      onError: (err: any) => {
+      onError: (err: unknown) => {
         toast({
-          title: err.message || "Error al reportar incidencia",
+          title: (err as { message?: string }).message || "Error al reportar incidencia",
           type: "error",
         });
       },
@@ -151,9 +174,9 @@ export function IncidentsPage() {
           setIsStatusOpen(false);
           toast({ title: "Estado actualizado correctamente", type: "success" });
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           toast({
-            title: err.message || "Error al cambiar estado",
+            title: (err as { message?: string }).message || "Error al cambiar estado",
             type: "error",
           });
         },
@@ -161,7 +184,7 @@ export function IncidentsPage() {
     );
   };
 
-  const handleAssignSubmit = (payload: any) => {
+  const handleAssignSubmit = (payload: AssignResponsiblePayload) => {
     if (!selectedIncident) return;
     assignMutation.mutate(
       { incidentId: selectedIncident.incidentId, payload },
@@ -174,9 +197,9 @@ export function IncidentsPage() {
             type: "success",
           });
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           toast({
-            title: err.message || "Error al asignar responsable",
+            title: (err as { message?: string }).message || "Error al asignar responsable",
             type: "error",
           });
         },
@@ -324,7 +347,7 @@ export function IncidentsPage() {
               <select
                 id="severity-filter"
                 value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value as any)}
+                onChange={(e) => setSeverityFilter(e.target.value as "all" | IncidentSeverity)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">Todas</option>
@@ -345,7 +368,7 @@ export function IncidentsPage() {
               <select
                 id="status-filter"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
+                onChange={(e) => setStatusFilter(e.target.value as "all" | IncidentStatus)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">Todos</option>
@@ -501,6 +524,57 @@ export function IncidentsPage() {
                   : "Sin asignar"}
               </p>
             </div>
+
+            {activeSelectedIncident.sourceType ||
+            activeSelectedIncident.sourceAlertId ||
+            activeSelectedIncident.sourceClientEvidenceId ? (
+              <div>
+                <p className="text-xs text-gray-500 font-medium">Origen</p>
+                <div className="mt-2 space-y-3">
+                  {activeSelectedIncident.sourceType ? (
+                    <Badge className="bg-slate-100 text-slate-700 border border-slate-200">
+                      {activeSelectedIncident.sourceType === "AI_ALERT"
+                        ? "Alerta IA"
+                        : "Manual"}
+                    </Badge>
+                  ) : null}
+
+                  {activeSelectedIncident.sourceAlertId ? (
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-500">Alerta origen</p>
+                      <p className="text-sm font-mono text-gray-900">
+                        {activeSelectedIncident.sourceAlertId.slice(0, 8)}...
+                      </p>
+                      <Button
+                        variant="secondary"
+                        className="w-full"
+                        onClick={() =>
+                          navigate(
+                            "/alerts?alertId=" +
+                              activeSelectedIncident.sourceAlertId,
+                          )
+                        }
+                      >
+                        Ver alerta
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {activeSelectedIncident.sourceClientEvidenceId ? (
+                    <div className="space-y-1">
+                      <p className="text-xs text-gray-500">Evidencia</p>
+                      <p className="text-sm font-mono text-gray-900">
+                        {activeSelectedIncident.sourceClientEvidenceId.slice(
+                          0,
+                          8,
+                        )}
+                        ...
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             <div className="pt-4 border-t space-y-2">
               <Button

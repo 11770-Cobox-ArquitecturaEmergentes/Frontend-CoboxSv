@@ -28,6 +28,14 @@ export function useIncidentById(incidentId: string | undefined) {
   });
 }
 
+export function useIncidentBySourceAlert(alertId?: string) {
+  return useQuery({
+    queryKey: ["incidents", "source", "ai-alert", alertId ?? "none"],
+    queryFn: () => incidentsService.getBySourceAiAlert(alertId as string),
+    enabled: Boolean(alertId),
+  });
+}
+
 /**
  * Hook para crear una nueva incidencia
  */

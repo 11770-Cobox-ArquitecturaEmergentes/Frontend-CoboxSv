@@ -1,5 +1,5 @@
 import { fleetApi } from '@/services';
-import type { BackendVehicleResource, CreateVehiclePayload, UpdateVehicleStatusPayload, Vehicle } from '../types';
+import type { BackendVehicleResource, CreateVehiclePayload, UpdateVehicleStatusPayload, Vehicle, VehicleHealthResource } from '../types';
 
 type VehicleListResponse = BackendVehicleResource[] | { value?: BackendVehicleResource[]; data?: BackendVehicleResource[] };
 
@@ -58,5 +58,10 @@ export const vehiclesService = {
         : fleetApi.patch<BackendVehicleResource>(`/api/v1/vehicles/${vehicleId}`, payload);
     const { data } = await request;
     return toVehicle(data);
+  },
+
+  async getVehicleHealth(vehicleId: string): Promise<VehicleHealthResource> {
+    const { data } = await fleetApi.get<VehicleHealthResource>(`/api/v1/desktop/vehicles/${vehicleId}/health`);
+    return data;
   },
 };

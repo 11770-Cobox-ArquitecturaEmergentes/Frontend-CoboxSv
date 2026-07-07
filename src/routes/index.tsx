@@ -4,6 +4,8 @@ import { AuthLayout, DashboardLayout, DriverLayout } from '@/components/layouts'
 import { LoginPage, RegisterPage } from '@/features/auth';
 import { DashboardPage } from '@/features/dashboard';
 import { SmartVisionPage } from '@/features/smartvision';
+import { AlertsPage } from '@/features/alerts';
+import { EvidenceAnalysesPage } from '@/features/evidence-analyses';
 import { VehiclesPage } from '@/features/vehicles';
 import { DriversPage } from '@/features/drivers';
 import { OrdersPage } from '@/features/orders';
@@ -42,6 +44,8 @@ export function AppRoutes() {
       <Route element={<DashboardLayout />}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/smartvision" element={<SmartVisionPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/evidence-analyses" element={<EvidenceAnalysesPage />} />
         <Route path="/vehicles" element={<VehiclesPage />} />
         <Route path="/drivers" element={<DriversPage />} />
         <Route path="/orders" element={<OrdersPage />} />

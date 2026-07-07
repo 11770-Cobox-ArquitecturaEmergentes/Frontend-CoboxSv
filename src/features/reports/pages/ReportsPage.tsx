@@ -1,67 +1,118 @@
-import { useEffect, useState } from 'react';
-import { PageHeader } from '@/components/common';
-import { Card, Skeleton } from '@/components/ui';
+import { useState } from 'react';
 import { Activity } from 'lucide-react';
-import { reportsService } from '../services/reportsService';
-import type { IncidentReportMetric } from '../types';
+import { ApiErrorState } from '@/components/shared';
+import { EmptyState, PageHeader } from '@/components/common';
+import { Card, Skeleton } from '@/components/ui';
+import { useReportMetrics } from '../hooks';
+import type {
+  IncidentReportMetric,
+  ReportCategory,
+  ReportMetric,
+} from '../types';
+
+const tabs: { value: ReportCategory; label: string }[] = [
+  { value: 'incidents', label: 'Incidentes' },
+  { value: 'operations', label: 'Operaciones' },
+  { value: 'smartvision', label: 'SmartVision IA' },
+  { value: 'maintenance', label: 'Mantenimiento' },
+  { value: 'fleet', label: 'Flota' },
+  { value: 'deliveries', label: 'Entregas' },
+];
+
+type Metric = IncidentReportMetric | ReportMetric;
+
+function ReportMetricsGrid({
+  metrics,
+  isLoading,
+  isError,
+  onRetry,
+}: {
+  metrics: Metric[];
+  isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
+}) {
+  if (isError) {
+    return <ApiErrorState title="No se pudo cargar el reporte" onRetry={onRetry} />;
+  }
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-[120px] w-full" />
+        ))}
+      </div>
+    );
+  }
+  if (metrics.length === 0) {
+    return (
+      <EmptyState
+        title="Sin métricas disponibles"
+        description="Todavía no se registran métricas para este reporte."
+      />
+    );
+  }
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {metrics.map((m) => (
+        <Card key={m.id} className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-[#DFF6F1] text-[#0F766E] rounded-lg">
+              <Activity size={24} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500 capitalize">
+                {m.metricName.replace(/_/g, ' ').toLowerCase()}
+              </p>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {String(m.metricValue)}
+              </h3>
+            </div>
+          </div>
+          <div className="mt-4 text-xs text-gray-400">
+            Última actualización: {new Date(m.aggregatedAt).toLocaleString()}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
 export function ReportsPage() {
-  const [metrics, setMetrics] = useState<IncidentReportMetric[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<ReportCategory>('incidents');
 
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      try {
-        const response = await reportsService.getIncidentMetrics();
-        if (response.data) {
-          setMetrics(response.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch incident metrics:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchMetrics();
-  }, []);
+  const metricsHook = useReportMetrics(activeTab);
 
   return (
     <div className="space-y-6">
-      <PageHeader 
-        title="Reportes" 
-        description="Analítica operativa y estadísticas generales (Arquitectura Medallón)." 
+      <PageHeader
+        title="Reportes"
+        description="Métricas operacionales para el gestor CoBox."
       />
-      
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {isLoading ? (
-          <Skeleton className="h-[120px] w-full" />
-        ) : metrics.length > 0 ? (
-          metrics.map((metric) => (
-            <Card key={metric.id} className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-                  <Activity size={24} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500 capitalize">
-                    {metric.metricName.replace(/_/g, ' ').toLowerCase()}
-                  </p>
-                  <h3 className="text-2xl font-bold text-gray-900">
-                    {metric.metricValue}
-                  </h3>
-                </div>
-              </div>
-              <div className="mt-4 text-xs text-gray-400">
-                Última actualización: {new Date(metric.aggregatedAt).toLocaleString()}
-              </div>
-            </Card>
-          ))
-        ) : (
-          <div className="col-span-full">
-            <p className="text-gray-500 text-sm">No hay métricas disponibles en este momento.</p>
-          </div>
-        )}
+
+      <div className="flex flex-wrap gap-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => setActiveTab(tab.value)}
+            className={
+              activeTab === tab.value
+                ? 'bg-[#0F766E] text-white px-4 py-2 rounded-lg text-sm font-semibold'
+                : 'bg-white text-slate-700 hover:bg-slate-100 border border-[#E2E8F0] px-4 py-2 rounded-lg text-sm font-semibold'
+            }
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
+
+      <ReportMetricsGrid
+        metrics={(metricsHook.data ?? []) as Metric[]}
+        isLoading={metricsHook.isLoading}
+        isError={metricsHook.isError}
+        onRetry={() => void metricsHook.refetch()}
+      />
     </div>
   );
 }
