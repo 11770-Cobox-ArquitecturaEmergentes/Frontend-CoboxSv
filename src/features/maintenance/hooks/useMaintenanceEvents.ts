@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { maintenanceService } from "../services/maintenanceService";
 import type {
   MaintenanceOrder,
-  MaintenanceSchedule,
   CreateMaintenanceOrderPayload,
   ScheduleMaintenanceOrderPayload,
   CompleteMaintenanceOrderPayload,
@@ -261,13 +260,6 @@ export function useRegisterCost() {
 
 // ========== MAINTENANCE SCHEDULES - QUERIES ==========
 
-export function useMaintenanceSchedules() {
-  return useQuery({
-    queryKey: ["maintenance-schedules"],
-    queryFn: () => maintenanceService.getMaintenanceSchedules(),
-  });
-}
-
 export function useMaintenanceScheduleById(scheduleId: number | undefined) {
   return useQuery({
     queryKey: ["maintenance-schedules", scheduleId],
@@ -284,10 +276,8 @@ export function useCreateMaintenanceSchedule() {
   return useMutation({
     mutationFn: (payload: CreateMaintenanceSchedulePayload) =>
       maintenanceService.createMaintenanceSchedule(payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["maintenance-schedules"],
-      });
+    onSuccess: (created) => {
+      queryClient.setQueryData(["maintenance-schedules", created.id], created);
     },
   });
 }
@@ -299,16 +289,7 @@ export function useActivateMaintenanceSchedule() {
     mutationFn: (scheduleId: number) =>
       maintenanceService.activateMaintenanceSchedule(scheduleId),
     onSuccess: (updated) => {
-      queryClient.setQueryData<MaintenanceSchedule[]>(
-        ["maintenance-schedules"],
-        (current) =>
-          (current ?? []).map((schedule) =>
-            schedule.id === updated.id ? updated : schedule,
-          ),
-      );
-      void queryClient.invalidateQueries({
-        queryKey: ["maintenance-schedules"],
-      });
+      queryClient.setQueryData(["maintenance-schedules", updated.id], updated);
     },
   });
 }
@@ -320,16 +301,7 @@ export function useDeactivateMaintenanceSchedule() {
     mutationFn: (scheduleId: number) =>
       maintenanceService.deactivateMaintenanceSchedule(scheduleId),
     onSuccess: (updated) => {
-      queryClient.setQueryData<MaintenanceSchedule[]>(
-        ["maintenance-schedules"],
-        (current) =>
-          (current ?? []).map((schedule) =>
-            schedule.id === updated.id ? updated : schedule,
-          ),
-      );
-      void queryClient.invalidateQueries({
-        queryKey: ["maintenance-schedules"],
-      });
+      queryClient.setQueryData(["maintenance-schedules", updated.id], updated);
     },
   });
 }
@@ -341,16 +313,7 @@ export function useEvaluateMaintenanceSchedule() {
     mutationFn: (scheduleId: number) =>
       maintenanceService.evaluateMaintenanceSchedule(scheduleId),
     onSuccess: (updated) => {
-      queryClient.setQueryData<MaintenanceSchedule[]>(
-        ["maintenance-schedules"],
-        (current) =>
-          (current ?? []).map((schedule) =>
-            schedule.id === updated.id ? updated : schedule,
-          ),
-      );
-      void queryClient.invalidateQueries({
-        queryKey: ["maintenance-schedules"],
-      });
+      queryClient.setQueryData(["maintenance-schedules", updated.id], updated);
     },
   });
 }
@@ -367,16 +330,7 @@ export function useUpdateMaintenanceRules() {
       payload: UpdateMaintenanceRulesPayload;
     }) => maintenanceService.updateMaintenanceRules(scheduleId, payload),
     onSuccess: (updated) => {
-      queryClient.setQueryData<MaintenanceSchedule[]>(
-        ["maintenance-schedules"],
-        (current) =>
-          (current ?? []).map((schedule) =>
-            schedule.id === updated.id ? updated : schedule,
-          ),
-      );
-      void queryClient.invalidateQueries({
-        queryKey: ["maintenance-schedules"],
-      });
+      queryClient.setQueryData(["maintenance-schedules", updated.id], updated);
     },
   });
 }

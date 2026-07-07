@@ -225,16 +225,6 @@ export const maintenanceService = {
   // ========== MAINTENANCE SCHEDULES ==========
 
   /**
-   * Obtiene todos los cronogramas de mantenimiento
-   */
-  async getMaintenanceSchedules(): Promise<MaintenanceSchedule[]> {
-    const { data } = await fleetApi.get<BackendMaintenanceScheduleResource[]>(
-      "/api/v1/maintenance-schedules",
-    );
-    return (data || []).map(toMaintenanceSchedule);
-  },
-
-  /**
    * Obtiene un cronograma por ID
    */
   async getMaintenanceScheduleById(

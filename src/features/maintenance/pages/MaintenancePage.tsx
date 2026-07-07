@@ -1,632 +1,885 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { AlertTriangle, CheckCircle2, ClipboardList, Eye, Plus, Search, Settings2, Wrench, X } from 'lucide-react';
+import { isAxiosError } from 'axios';
+import { ApiErrorState } from '@/components/shared';
+import { Badge, Button, Card, Dialog, Input, Select, Skeleton, useToast } from '@/components/ui';
 import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
-import {
-  Wrench,
-  Search,
-  Eye,
-  X,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-} from "lucide-react";
-import {
-  Badge,
-  Button,
-  Card,
-  Input,
-  Skeleton,
-  useToast,
-} from "@/components/ui";
-import { ApiErrorState } from "@/components/shared";
-import { PageHeader } from "@/components/common";
-import {
+  useActivateMaintenanceSchedule,
+  useCancelMaintenanceOrder,
+  useCompleteMaintenanceOrder,
+  useCreateMaintenanceOrder,
+  useCreateMaintenanceSchedule,
+  useDeactivateMaintenanceSchedule,
+  useEvaluateMaintenanceSchedule,
+  useMaintenanceOrderById,
   useMaintenanceOrders,
+  useMaintenanceScheduleById,
+  useReceiveParts,
+  useRegisterCost,
+  useRegisterJob,
+  useRequestParts,
   useScheduleMaintenanceOrder,
   useStartMaintenanceOrder,
-  useCompleteMaintenanceOrder,
-  useCancelMaintenanceOrder,
-} from "../hooks";
+  useUpdateMaintenanceRules,
+} from '../hooks';
 import type {
+  CancelMaintenanceOrderPayload,
+  CompleteMaintenanceOrderPayload,
+  CreateMaintenanceOrderPayload,
+  CreateMaintenanceSchedulePayload,
   MaintenanceOrder,
   MaintenanceOrderStatus,
-  MaintenanceType,
   MaintenancePriority,
-} from "../types";
+  MaintenanceReason,
+  MaintenanceRule,
+  MaintenanceSchedule,
+  MaintenanceType,
+  ReceivePartsPayload,
+  RegisterCostPayload,
+  RegisterJobPayload,
+  RequestPartsPayload,
+  ScheduleMaintenanceOrderPayload,
+  UpdateMaintenanceRulesPayload,
+} from '../types';
 
-const columnHelper = createColumnHelper<MaintenanceOrder>();
+type TabKey = 'orders' | 'schedules';
+type OrderDialog =
+  | 'create-order'
+  | 'schedule'
+  | 'complete'
+  | 'cancel'
+  | 'job'
+  | 'parts'
+  | 'receive-parts'
+  | 'cost'
+  | null;
+type ScheduleDialogType = 'create-schedule' | 'rules' | null;
 
 const typeLabels: Record<MaintenanceType, string> = {
-  PREVENTIVE: "Preventivo",
-  CORRECTIVE: "Correctivo",
-  PREDICTIVE: "Predictivo",
+  PREVENTIVE: 'Preventivo',
+  CORRECTIVE: 'Correctivo',
+  PREDICTIVE: 'Predictivo',
 };
 
 const priorityLabels: Record<MaintenancePriority, string> = {
-  LOW: "Baja",
-  MEDIUM: "Media",
-  HIGH: "Alta",
-  CRITICAL: "Crítica",
+  LOW: 'Baja',
+  MEDIUM: 'Media',
+  HIGH: 'Alta',
+  CRITICAL: 'Critica',
+};
+
+const reasonLabels: Record<MaintenanceReason, string> = {
+  SCHEDULED: 'Programado',
+  BREAKDOWN: 'Averia',
+  INSPECTION: 'Inspeccion',
+  OTHER: 'Otro',
 };
 
 const statusLabels: Record<MaintenanceOrderStatus, string> = {
-  OPEN: "Abierto",
-  SCHEDULED: "Programado",
-  IN_PROGRESS: "En Progreso",
-  COMPLETED: "Completado",
-  CANCELLED: "Cancelado",
+  OPEN: 'Abierta',
+  SCHEDULED: 'Programada',
+  IN_PROGRESS: 'En progreso',
+  COMPLETED: 'Completada',
+  CANCELLED: 'Cancelada',
 };
 
 const statusClasses: Record<MaintenanceOrderStatus, string> = {
-  OPEN: "bg-slate-100 text-slate-700 border border-slate-200",
-  SCHEDULED: "bg-blue-50 text-blue-700 border border-blue-200",
-  IN_PROGRESS: "bg-amber-50 text-amber-700 border border-amber-200",
-  COMPLETED: "bg-green-50 text-green-700 border border-green-200",
-  CANCELLED: "bg-red-50 text-red-700 border border-red-200",
+  OPEN: 'bg-slate-100 text-slate-700',
+  SCHEDULED: 'bg-blue-50 text-blue-700',
+  IN_PROGRESS: 'bg-amber-50 text-amber-700',
+  COMPLETED: 'bg-[#DFF6F1] text-[#0F766E]',
+  CANCELLED: 'bg-red-50 text-red-700',
 };
 
 const priorityClasses: Record<MaintenancePriority, string> = {
-  LOW: "bg-slate-100 text-slate-700",
-  MEDIUM: "bg-amber-100 text-amber-700",
-  HIGH: "bg-orange-100 text-orange-700",
-  CRITICAL: "bg-red-100 text-red-700",
+  LOW: 'bg-slate-100 text-slate-700',
+  MEDIUM: 'bg-amber-50 text-amber-700',
+  HIGH: 'bg-orange-50 text-orange-700',
+  CRITICAL: 'bg-red-50 text-red-700',
 };
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (!isAxiosError(error)) return fallback;
+  const data = error.response?.data as { message?: string; details?: string } | undefined;
+  return data?.message ?? data?.details ?? fallback;
+}
+
+function formatMoney(amount?: string | number | null, currency?: string | null) {
+  if (amount == null) return '-';
+  return `${amount} ${currency ?? ''}`.trim();
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+function formatKilometers(value?: number | null) {
+  return typeof value === 'number' ? `${value.toLocaleString('es-PE')} km` : '-';
+}
+
+function emptyRule(): MaintenanceRule {
+  return { name: '', thresholdKm: 0, thresholdDays: 0 };
+}
+
 export function MaintenancePage() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | MaintenanceOrderStatus
-  >("all");
-  const [typeFilter, setTypeFilter] = useState<"all" | MaintenanceType>("all");
-  const [selectedOrder, setSelectedOrder] = useState<MaintenanceOrder | null>(
-    null,
-  );
+  const [tab, setTab] = useState<TabKey>('orders');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | MaintenanceOrderStatus>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | MaintenanceType>('all');
+  const [priorityFilter, setPriorityFilter] = useState<'all' | MaintenancePriority>('all');
+  const [selectedOrderId, setSelectedOrderId] = useState<number>();
+  const [orderDialog, setOrderDialog] = useState<OrderDialog>(null);
+  const [scheduleDialog, setScheduleDialog] = useState<ScheduleDialogType>(null);
+  const [scheduleSearch, setScheduleSearch] = useState('');
+  const [scheduleId, setScheduleId] = useState<number>();
+  const [localSchedule, setLocalSchedule] = useState<MaintenanceSchedule | null>(null);
 
   const { toast } = useToast();
   const ordersQuery = useMaintenanceOrders();
+  const orderDetailQuery = useMaintenanceOrderById(selectedOrderId);
+  const scheduleQuery = useMaintenanceScheduleById(scheduleId);
 
-  const scheduleOrderMutation = useScheduleMaintenanceOrder();
-  const startOrderMutation = useStartMaintenanceOrder();
-  const completeOrderMutation = useCompleteMaintenanceOrder();
-  const cancelOrderMutation = useCancelMaintenanceOrder();
+  const createOrder = useCreateMaintenanceOrder();
+  const scheduleOrder = useScheduleMaintenanceOrder();
+  const startOrder = useStartMaintenanceOrder();
+  const completeOrder = useCompleteMaintenanceOrder();
+  const cancelOrder = useCancelMaintenanceOrder();
+  const registerJob = useRegisterJob();
+  const requestParts = useRequestParts();
+  const receiveParts = useReceiveParts();
+  const registerCost = useRegisterCost();
+  const createSchedule = useCreateMaintenanceSchedule();
+  const activateSchedule = useActivateMaintenanceSchedule();
+  const deactivateSchedule = useDeactivateMaintenanceSchedule();
+  const evaluateSchedule = useEvaluateMaintenanceSchedule();
+  const updateRules = useUpdateMaintenanceRules();
 
   const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data]);
+  const selectedOrder = orderDetailQuery.data ?? orders.find((order) => order.id === selectedOrderId) ?? null;
+  const displayedSchedule = scheduleQuery.data ?? localSchedule;
 
-  // Filtrar órdenes
   const filteredOrders = useMemo(() => {
     const term = search.trim().toLowerCase();
     return orders.filter((order) => {
       const matchesSearch =
-        order.id.toString().includes(term) ||
-        order.vehicleId.toString().includes(term) ||
-        order.maintenanceType?.toLowerCase().includes(term) ||
-        order.reason?.toLowerCase().includes(term);
-      const matchesStatus =
-        statusFilter === "all" || order.status === statusFilter;
-      const matchesType =
-        typeFilter === "all" || order.maintenanceType === typeFilter;
-      return matchesSearch && matchesStatus && matchesType;
+        !term ||
+        String(order.id).includes(term) ||
+        String(order.vehicleId).includes(term) ||
+        String(order.reason ?? '').toLowerCase().includes(term);
+      const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+      const matchesType = typeFilter === 'all' || order.maintenanceType === typeFilter;
+      const matchesPriority = priorityFilter === 'all' || order.priority === priorityFilter;
+      return matchesSearch && matchesStatus && matchesType && matchesPriority;
     });
-  }, [orders, search, statusFilter, typeFilter]);
+  }, [orders, priorityFilter, search, statusFilter, typeFilter]);
 
-  const activeSelectedOrder = useMemo(() => {
-    if (!selectedOrder) return null;
-    return orders.find((o) => o.id === selectedOrder.id) || null;
-  }, [orders, selectedOrder]);
+  const metrics = useMemo(() => ({
+    total: orders.length,
+    open: orders.filter((order) => order.status === 'OPEN').length,
+    scheduled: orders.filter((order) => order.status === 'SCHEDULED').length,
+    progress: orders.filter((order) => order.status === 'IN_PROGRESS').length,
+    closed: orders.filter((order) => order.status === 'COMPLETED' || order.status === 'CANCELLED').length,
+  }), [orders]);
 
-  // Métricas
-  const metrics = useMemo(() => {
-    const active = orders.filter(
-      (o) => o.status !== "COMPLETED" && o.status !== "CANCELLED",
-    );
-    return {
-      total: orders.length,
-      active: active.length,
-      openOrders: active.filter((o) => o.status === "OPEN").length,
-      inProgress: active.filter((o) => o.status === "IN_PROGRESS").length,
-      completed: orders.filter((o) => o.status === "COMPLETED").length,
-    };
-  }, [orders]);
+  const handleError = (error: unknown, fallback: string) => toast({ title: getErrorMessage(error, fallback), type: 'error' });
 
-  // Acciones
-  const handleSchedule = (orderId: number) => {
-    scheduleOrderMutation.mutate(
-      { orderId, payload: { scheduledTimelapseDays: 7 } },
-      {
-        onSuccess: (updated) => {
-          setSelectedOrder(updated);
-          toast({ title: "Orden programada correctamente", type: "success" });
-        },
-        onError: (err: any) => {
-          toast({
-            title: err.message || "Error al programar orden",
-            type: "error",
-          });
-        },
-      },
-    );
+  const updateSelectedOrder = (order: MaintenanceOrder) => {
+    setSelectedOrderId(order.id);
   };
 
-  const handleStart = (orderId: number) => {
-    startOrderMutation.mutate(orderId, {
+  const handleSearchSchedule = () => {
+    const parsed = Number(scheduleSearch);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      toast({ title: 'Ingresa un ID de programacion valido', type: 'error' });
+      return;
+    }
+    setScheduleId(parsed);
+    setLocalSchedule(null);
+  };
+
+  const handleScheduleMutation = (
+    mutation: { mutate: (id: number, options: { onSuccess: (schedule: MaintenanceSchedule) => void; onError: (error: unknown) => void }) => void },
+    successTitle: string,
+  ) => {
+    if (!displayedSchedule) return;
+    mutation.mutate(displayedSchedule.id, {
       onSuccess: (updated) => {
-        setSelectedOrder(updated);
-        toast({ title: "Mantenimiento iniciado", type: "success" });
+        setLocalSchedule(updated);
+        setScheduleId(updated.id);
+        toast({ title: successTitle, type: 'success' });
       },
-      onError: (err: any) => {
-        toast({
-          title: err.message || "Error al iniciar mantenimiento",
-          type: "error",
-        });
-      },
+      onError: (error) => handleError(error, 'No se pudo actualizar la programacion'),
     });
   };
-
-  const handleComplete = (orderId: number, closingOdometer: number) => {
-    completeOrderMutation.mutate(
-      { orderId, payload: { closingOdometer } },
-      {
-        onSuccess: (updated) => {
-          setSelectedOrder(updated);
-          toast({ title: "Mantenimiento completado", type: "success" });
-        },
-        onError: (err: any) => {
-          toast({
-            title: err.message || "Error al completar mantenimiento",
-            type: "error",
-          });
-        },
-      },
-    );
-  };
-
-  const handleCancel = (orderId: number, reason: string) => {
-    cancelOrderMutation.mutate(
-      { orderId, payload: { reason } },
-      {
-        onSuccess: (updated) => {
-          setSelectedOrder(updated);
-          toast({ title: "Orden cancelada", type: "success" });
-        },
-        onError: (err: any) => {
-          toast({
-            title: err.message || "Error al cancelar orden",
-            type: "error",
-          });
-        },
-      },
-    );
-  };
-
-  // Tabla
-  const columns = [
-    columnHelper.accessor("id", {
-      header: "ID",
-      cell: (info) => (
-        <span className="font-mono text-sm font-semibold">
-          {info.getValue()}
-        </span>
-      ),
-    }),
-    columnHelper.accessor("vehicleId", {
-      header: "Vehículo",
-      cell: (info) => (
-        <span className="text-sm">Vehículo #{info.getValue()}</span>
-      ),
-    }),
-    columnHelper.accessor("maintenanceType", {
-      header: "Tipo",
-      cell: (info) => (
-        <span className="text-sm">{typeLabels[info.getValue()]}</span>
-      ),
-    }),
-    columnHelper.accessor("priority", {
-      header: "Prioridad",
-      cell: (info) => (
-        <Badge className={priorityClasses[info.getValue()]}>
-          {priorityLabels[info.getValue()]}
-        </Badge>
-      ),
-    }),
-    columnHelper.accessor("status", {
-      header: "Estado",
-      cell: (info) => (
-        <Badge className={statusClasses[info.getValue()]}>
-          {statusLabels[info.getValue()]}
-        </Badge>
-      ),
-    }),
-    columnHelper.accessor("openingOdometer", {
-      header: "Odómetro Inicial",
-      cell: (info) => <span className="text-sm">{info.getValue()} km</span>,
-    }),
-    columnHelper.display({
-      id: "actions",
-      header: "",
-      cell: (info) => (
-        <button
-          onClick={() => setSelectedOrder(info.row.original)}
-          className="text-blue-600 hover:text-blue-900 p-1"
-          title="Ver detalles"
-        >
-          <Eye className="w-4 h-4" />
-        </button>
-      ),
-    }),
-  ];
-
-  const table = useReactTable({
-    data: filteredOrders,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  });
-
-  if (ordersQuery.isError) {
-    return (
-      <ApiErrorState
-        title="Error al cargar órdenes de mantenimiento"
-        message="No pudimos cargar las órdenes"
-        onRetry={() => ordersQuery.refetch()}
-      />
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <PageHeader
-        title="Gestión de Mantenimiento"
-        description="Monitorea y gestiona órdenes de mantenimiento"
-      />
-
-      <div className="px-4 md:px-8 py-6 space-y-6">
-        {/* Métricas */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Card className="p-4">
-            <p className="text-xs text-gray-600 font-medium">Total Órdenes</p>
-            <p className="text-2xl font-bold text-gray-900">{metrics.total}</p>
-          </Card>
-          <Card className="p-4 border-l-4 border-l-slate-500">
-            <p className="text-xs text-gray-600 font-medium">Activas</p>
-            <p className="text-2xl font-bold text-slate-700">
-              {metrics.active}
-            </p>
-          </Card>
-          <Card className="p-4 border-l-4 border-l-blue-500">
-            <p className="text-xs text-gray-600 font-medium">Abiertas</p>
-            <p className="text-2xl font-bold text-blue-700">
-              {metrics.openOrders}
-            </p>
-          </Card>
-          <Card className="p-4 border-l-4 border-l-amber-500">
-            <p className="text-xs text-gray-600 font-medium">En Progreso</p>
-            <p className="text-2xl font-bold text-amber-700">
-              {metrics.inProgress}
-            </p>
-          </Card>
-          <Card className="p-4 border-l-4 border-l-green-500">
-            <p className="text-xs text-gray-600 font-medium">Completadas</p>
-            <p className="text-2xl font-bold text-green-700">
-              {metrics.completed}
-            </p>
-          </Card>
+    <section className="space-y-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">Gestion de mantenimiento</h1>
+          <p className="mt-2 text-sm text-[#64748B]">Controla ordenes, repuestos, costos y programaciones de mantenimiento.</p>
         </div>
-
-        {/* Filtros */}
-        <Card className="p-4">
-          <div className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex-1">
-              <label
-                htmlFor="search"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Buscar
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                <Input
-                  id="search"
-                  type="text"
-                  placeholder="Buscar por ID, vehículo o tipo..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-
-            <div className="w-full md:w-48">
-              <label
-                htmlFor="type-filter"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Tipo
-              </label>
-              <select
-                id="type-filter"
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">Todos</option>
-                <option value="PREVENTIVE">Preventivo</option>
-                <option value="CORRECTIVE">Correctivo</option>
-                <option value="PREDICTIVE">Predictivo</option>
-              </select>
-            </div>
-
-            <div className="w-full md:w-48">
-              <label
-                htmlFor="status-filter"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Estado
-              </label>
-              <select
-                id="status-filter"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">Todos</option>
-                <option value="OPEN">Abierto</option>
-                <option value="SCHEDULED">Programado</option>
-                <option value="IN_PROGRESS">En Progreso</option>
-                <option value="COMPLETED">Completado</option>
-                <option value="CANCELLED">Cancelado</option>
-              </select>
-            </div>
-          </div>
-        </Card>
-
-        {/* Tabla */}
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-gray-200">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-6 py-3 text-left font-semibold text-gray-700"
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {ordersQuery.isLoading ? (
-                  <tr>
-                    <td colSpan={columns.length} className="px-6 py-4">
-                      <Skeleton className="h-8 w-full" />
-                    </td>
-                  </tr>
-                ) : filteredOrders.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={columns.length}
-                      className="px-6 py-8 text-center"
-                    >
-                      <AlertTriangle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <p className="text-gray-600">
-                        No hay órdenes para mostrar
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50">
-                      {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id} className="px-6 py-4">
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <div className="grid grid-cols-2 gap-2 rounded-lg border border-[#E2E8F0] bg-white p-1">
+          <Button variant={tab === 'orders' ? 'primary' : 'ghost'} onClick={() => setTab('orders')}>
+            Ordenes
+          </Button>
+          <Button variant={tab === 'schedules' ? 'primary' : 'ghost'} onClick={() => setTab('schedules')}>
+            Programaciones
+          </Button>
+        </div>
       </div>
 
-      {/* Panel lateral de detalles */}
-      {activeSelectedOrder && (
-        <div className="fixed right-0 top-0 h-full w-full md:w-96 bg-white shadow-lg z-40 overflow-y-auto">
-          <div className="p-4 border-b flex justify-between items-center">
-            <h3 className="font-semibold text-lg">Detalles de Orden</h3>
-            <button
-              onClick={() => setSelectedOrder(null)}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      {tab === 'orders' ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard title="Total" value={metrics.total} icon={<ClipboardList className="h-5 w-5" />} tone="slate" />
+            <MetricCard title="Abiertas" value={metrics.open} icon={<AlertTriangle className="h-5 w-5" />} tone="blue" />
+            <MetricCard title="Programadas" value={metrics.scheduled} icon={<Settings2 className="h-5 w-5" />} tone="blue" />
+            <MetricCard title="En progreso" value={metrics.progress} icon={<Wrench className="h-5 w-5" />} tone="amber" />
+            <MetricCard title="Cerradas" value={metrics.closed} icon={<CheckCircle2 className="h-5 w-5" />} tone="green" />
           </div>
 
-          <div className="p-6 space-y-6">
-            <div>
-              <p className="text-xs text-gray-500 font-medium">ID de Orden</p>
-              <p className="text-sm font-mono text-gray-900 mt-1">
-                {activeSelectedOrder.id}
-              </p>
+          <Card className="grid gap-4 p-5 lg:grid-cols-[1fr_180px_180px_180px_auto]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" aria-hidden="true" />
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por ID, vehiculo o razon..." className="pl-9" />
             </div>
+            <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | MaintenanceOrderStatus)}>
+              <option value="all">Todos los estados</option>
+              {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </Select>
+            <Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as 'all' | MaintenanceType)}>
+              <option value="all">Todos los tipos</option>
+              {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </Select>
+            <Select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value as 'all' | MaintenancePriority)}>
+              <option value="all">Prioridad</option>
+              {Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </Select>
+            <Button onClick={() => setOrderDialog('create-order')}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Crear
+            </Button>
+          </Card>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Vehículo</p>
-                <p className="text-sm text-gray-900 mt-1">
-                  #{activeSelectedOrder.vehicleId}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Tipo</p>
-                <p className="text-sm text-gray-900 mt-1">
-                  {typeLabels[activeSelectedOrder.maintenanceType]}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Prioridad</p>
-                <div className="mt-2">
-                  <Badge
-                    className={priorityClasses[activeSelectedOrder.priority]}
-                  >
-                    {priorityLabels[activeSelectedOrder.priority]}
-                  </Badge>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Estado</p>
-                <div className="mt-2">
-                  <Badge className={statusClasses[activeSelectedOrder.status]}>
-                    {statusLabels[activeSelectedOrder.status]}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Razón</p>
-              <p className="text-sm text-gray-900 mt-1">
-                {activeSelectedOrder.reason}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 font-medium">
-                  Odómetro Inicial
-                </p>
-                <p className="text-sm text-gray-900 mt-1">
-                  {activeSelectedOrder.openingOdometer} km
-                </p>
-              </div>
-              {activeSelectedOrder.closingOdometer && (
-                <div>
-                  <p className="text-xs text-gray-500 font-medium">
-                    Odómetro Final
-                  </p>
-                  <p className="text-sm text-gray-900 mt-1">
-                    {activeSelectedOrder.closingOdometer} km
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {activeSelectedOrder.jobs &&
-              activeSelectedOrder.jobs.length > 0 && (
-                <div>
-                  <p className="text-xs text-gray-500 font-medium">
-                    Trabajos ({activeSelectedOrder.jobs.length})
-                  </p>
-                  <div className="mt-2 space-y-2">
-                    {activeSelectedOrder.jobs.map((job) => (
-                      <div
-                        key={job.id}
-                        className="flex items-start gap-2 text-sm"
-                      >
-                        <CheckCircle2
-                          className={`w-4 h-4 mt-0.5 ${job.completed ? "text-green-600" : "text-gray-300"}`}
-                        />
-                        <span
-                          className={
-                            job.completed
-                              ? "text-gray-600 line-through"
-                              : "text-gray-900"
-                          }
-                        >
-                          {job.description}
-                        </span>
-                      </div>
+          <Card className="overflow-hidden">
+            {ordersQuery.isError ? (
+              <div className="p-5"><ApiErrorState onRetry={() => void ordersQuery.refetch()} /></div>
+            ) : ordersQuery.isLoading ? (
+              <div className="space-y-3 p-5"><Skeleton className="h-10" /><Skeleton className="h-16" /><Skeleton className="h-16" /></div>
+            ) : filteredOrders.length === 0 ? (
+              <div className="p-10 text-center text-sm text-[#64748B]">No hay ordenes de mantenimiento para mostrar.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                    <tr>
+                      <th className="border-b border-[#E2E8F0] px-6 py-4">Orden</th>
+                      <th className="border-b border-[#E2E8F0] px-6 py-4">Vehiculo</th>
+                      <th className="border-b border-[#E2E8F0] px-6 py-4">Tipo</th>
+                      <th className="border-b border-[#E2E8F0] px-6 py-4">Prioridad</th>
+                      <th className="border-b border-[#E2E8F0] px-6 py-4">Estado</th>
+                      <th className="border-b border-[#E2E8F0] px-6 py-4">Odometro</th>
+                      <th className="border-b border-[#E2E8F0] px-6 py-4">Tecnico</th>
+                      <th className="border-b border-[#E2E8F0] px-6 py-4">Costo</th>
+                      <th className="border-b border-[#E2E8F0] px-6 py-4 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOrders.map((order) => (
+                      <tr key={order.id} className="border-b border-[#E2E8F0] last:border-b-0">
+                        <td className="px-6 py-4 font-semibold text-slate-950">#{order.id}</td>
+                        <td className="px-6 py-4">Vehiculo #{order.vehicleId}</td>
+                        <td className="px-6 py-4">{typeLabels[order.maintenanceType] ?? order.maintenanceType}</td>
+                        <td className="px-6 py-4"><Badge className={priorityClasses[order.priority]}>{priorityLabels[order.priority] ?? order.priority}</Badge></td>
+                        <td className="px-6 py-4"><Badge className={statusClasses[order.status]}>{statusLabels[order.status] ?? order.status}</Badge></td>
+                        <td className="px-6 py-4">{formatKilometers(order.openingOdometer)}</td>
+                        <td className="px-6 py-4">{order.technicianId ? `#${order.technicianId}` : '-'}</td>
+                        <td className="px-6 py-4">{formatMoney(order.totalCostAmount, order.totalCostCurrency)}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex justify-end">
+                            <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Ver detalle" onClick={() => setSelectedOrderId(order.id)}>
+                              <Eye className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
-              )}
-
-            {activeSelectedOrder.totalCostAmount && (
-              <div>
-                <p className="text-xs text-gray-500 font-medium">Costo Total</p>
-                <p className="text-sm text-gray-900 mt-1">
-                  {activeSelectedOrder.totalCostAmount}{" "}
-                  {activeSelectedOrder.totalCostCurrency}
-                </p>
+                  </tbody>
+                </table>
               </div>
             )}
+          </Card>
+        </>
+      ) : (
+        <SchedulesView
+          scheduleSearch={scheduleSearch}
+          setScheduleSearch={setScheduleSearch}
+          schedule={displayedSchedule}
+          isLoading={scheduleQuery.isLoading}
+          isError={scheduleQuery.isError}
+          onSearch={handleSearchSchedule}
+          onCreate={() => setScheduleDialog('create-schedule')}
+          onActivate={() => handleScheduleMutation(activateSchedule, 'Programacion activada')}
+          onDeactivate={() => handleScheduleMutation(deactivateSchedule, 'Programacion desactivada')}
+          onEvaluate={() => handleScheduleMutation(evaluateSchedule, 'Programacion evaluada')}
+          onEditRules={() => setScheduleDialog('rules')}
+          onRetry={() => void scheduleQuery.refetch()}
+        />
+      )}
 
-            <div className="pt-4 border-t space-y-2">
-              {activeSelectedOrder.status === "OPEN" && (
+      {selectedOrder ? (
+        <OrderDetailsDrawer
+          order={selectedOrder}
+          isLoading={orderDetailQuery.isLoading}
+          onClose={() => setSelectedOrderId(undefined)}
+          onSchedule={() => setOrderDialog('schedule')}
+          onStart={() => startOrder.mutate(selectedOrder.id, {
+            onSuccess: (updated) => {
+              updateSelectedOrder(updated);
+              toast({ title: 'Mantenimiento iniciado', type: 'success' });
+            },
+            onError: (error) => handleError(error, 'No se pudo iniciar el mantenimiento'),
+          })}
+          onComplete={() => setOrderDialog('complete')}
+          onCancel={() => setOrderDialog('cancel')}
+          onJob={() => setOrderDialog('job')}
+          onParts={() => setOrderDialog('parts')}
+          onReceiveParts={() => setOrderDialog('receive-parts')}
+          onCost={() => setOrderDialog('cost')}
+        />
+      ) : null}
+
+      <MaintenanceOrderDialog
+        type={orderDialog}
+        order={selectedOrder}
+        isSubmitting={
+          createOrder.isPending || scheduleOrder.isPending || completeOrder.isPending || cancelOrder.isPending ||
+          registerJob.isPending || requestParts.isPending || receiveParts.isPending || registerCost.isPending
+        }
+        onClose={() => setOrderDialog(null)}
+        onCreate={(payload) => createOrder.mutate(payload, {
+          onSuccess: (created) => {
+            setOrderDialog(null);
+            updateSelectedOrder(created);
+            toast({ title: 'Orden creada correctamente', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudo crear la orden'),
+        })}
+        onSchedule={(payload) => selectedOrder && scheduleOrder.mutate({ orderId: selectedOrder.id, payload }, {
+          onSuccess: (updated) => {
+            setOrderDialog(null);
+            updateSelectedOrder(updated);
+            toast({ title: 'Orden programada', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudo programar la orden'),
+        })}
+        onComplete={(payload) => selectedOrder && completeOrder.mutate({ orderId: selectedOrder.id, payload }, {
+          onSuccess: (updated) => {
+            setOrderDialog(null);
+            updateSelectedOrder(updated);
+            toast({ title: 'Orden completada', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudo completar la orden'),
+        })}
+        onCancel={(payload) => selectedOrder && cancelOrder.mutate({ orderId: selectedOrder.id, payload }, {
+          onSuccess: (updated) => {
+            setOrderDialog(null);
+            updateSelectedOrder(updated);
+            toast({ title: 'Orden cancelada', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudo cancelar la orden'),
+        })}
+        onJob={(payload) => selectedOrder && registerJob.mutate({ orderId: selectedOrder.id, payload }, {
+          onSuccess: (updated) => {
+            setOrderDialog(null);
+            updateSelectedOrder(updated);
+            toast({ title: 'Trabajo registrado', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudo registrar el trabajo'),
+        })}
+        onParts={(payload) => selectedOrder && requestParts.mutate({ orderId: selectedOrder.id, payload }, {
+          onSuccess: (updated) => {
+            setOrderDialog(null);
+            updateSelectedOrder(updated);
+            toast({ title: 'Repuesto solicitado', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudo solicitar el repuesto'),
+        })}
+        onReceiveParts={(payload) => selectedOrder && receiveParts.mutate({ orderId: selectedOrder.id, payload }, {
+          onSuccess: (updated) => {
+            setOrderDialog(null);
+            updateSelectedOrder(updated);
+            toast({ title: 'Repuesto recibido', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudo recibir el repuesto'),
+        })}
+        onCost={(payload) => selectedOrder && registerCost.mutate({ orderId: selectedOrder.id, payload }, {
+          onSuccess: (updated) => {
+            setOrderDialog(null);
+            updateSelectedOrder(updated);
+            toast({ title: 'Costo registrado', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudo registrar el costo'),
+        })}
+      />
+
+      <MaintenanceScheduleDialog
+        type={scheduleDialog}
+        schedule={displayedSchedule}
+        isSubmitting={createSchedule.isPending || updateRules.isPending}
+        onClose={() => setScheduleDialog(null)}
+        onCreate={(payload) => createSchedule.mutate(payload, {
+          onSuccess: (created) => {
+            setScheduleDialog(null);
+            setLocalSchedule(created);
+            setScheduleId(created.id);
+            setScheduleSearch(String(created.id));
+            toast({ title: 'Programacion creada', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudo crear la programacion'),
+        })}
+        onRules={(payload) => displayedSchedule && updateRules.mutate({ scheduleId: displayedSchedule.id, payload }, {
+          onSuccess: (updated) => {
+            setScheduleDialog(null);
+            setLocalSchedule(updated);
+            setScheduleId(updated.id);
+            toast({ title: 'Reglas actualizadas', type: 'success' });
+          },
+          onError: (error) => handleError(error, 'No se pudieron actualizar las reglas'),
+        })}
+      />
+    </section>
+  );
+}
+
+function MetricCard({ title, value, icon, tone }: { title: string; value: number; icon: ReactNode; tone: 'slate' | 'blue' | 'amber' | 'green' }) {
+  const tones = {
+    slate: 'bg-slate-100 text-slate-700',
+    blue: 'bg-blue-50 text-blue-700',
+    amber: 'bg-amber-50 text-amber-700',
+    green: 'bg-[#DFF6F1] text-[#0F766E]',
+  };
+  return (
+    <Card className="flex items-center justify-between p-5">
+      <div>
+        <p className="text-sm text-[#64748B]">{title}</p>
+        <p className="mt-2 text-2xl font-bold text-slate-950">{value}</p>
+      </div>
+      <div className={`flex h-11 w-11 items-center justify-center rounded-lg ${tones[tone]}`}>{icon}</div>
+    </Card>
+  );
+}
+
+function OrderDetailsDrawer({
+  order,
+  isLoading,
+  onClose,
+  onSchedule,
+  onStart,
+  onComplete,
+  onCancel,
+  onJob,
+  onParts,
+  onReceiveParts,
+  onCost,
+}: {
+  order: MaintenanceOrder;
+  isLoading: boolean;
+  onClose: () => void;
+  onSchedule: () => void;
+  onStart: () => void;
+  onComplete: () => void;
+  onCancel: () => void;
+  onJob: () => void;
+  onParts: () => void;
+  onReceiveParts: () => void;
+  onCost: () => void;
+}) {
+  const requestedParts = order.partsRequests?.filter((part) => part.status === 'REQUESTED') ?? [];
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/30">
+      <aside className="flex h-full w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-xl">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">Detalle de orden #{order.id}</h2>
+            <p className="mt-1 text-sm text-slate-500">Vehiculo #{order.vehicleId}</p>
+          </div>
+          <Button variant="ghost" className="h-9 w-9 px-0" aria-label="Cerrar" onClick={onClose}>
+            <X className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {isLoading ? <Skeleton className="mb-4 h-20" /> : null}
+          <div className="space-y-4">
+            <Card className="grid gap-4 p-4 sm:grid-cols-2">
+              <Info label="Tipo" value={typeLabels[order.maintenanceType] ?? order.maintenanceType} />
+              <Info label="Prioridad" value={priorityLabels[order.priority] ?? order.priority} />
+              <Info label="Estado" value={statusLabels[order.status] ?? order.status} />
+              <Info label="Razon" value={reasonLabels[order.reason] ?? order.reason} />
+              <Info label="Odometro inicial" value={formatKilometers(order.openingOdometer)} />
+              <Info label="Odometro final" value={formatKilometers(order.closingOdometer)} />
+              <Info label="Tecnico" value={order.technicianId ? `#${order.technicianId}` : '-'} />
+              <Info label="Costo total" value={formatMoney(order.totalCostAmount, order.totalCostCurrency)} />
+            </Card>
+
+            <Card className="p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-950">Trabajos</h3>
+              {(order.jobs ?? []).length === 0 ? (
+                <p className="text-sm text-slate-500">Sin trabajos registrados.</p>
+              ) : (
+                <div className="space-y-2">
+                  {(order.jobs ?? []).map((job) => (
+                    <div key={job.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                      <span>{job.description}</span>
+                      <Badge className={job.completed ? 'bg-[#DFF6F1] text-[#0F766E]' : 'bg-slate-100 text-slate-700'}>
+                        {job.completed ? 'Completado' : 'Pendiente'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-950">Repuestos</h3>
+              {(order.partsRequests ?? []).length === 0 ? (
+                <p className="text-sm text-slate-500">Sin repuestos solicitados.</p>
+              ) : (
+                <div className="space-y-2">
+                  {(order.partsRequests ?? []).map((part) => (
+                    <div key={part.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                      <span>{part.partName} x{part.quantity}</span>
+                      <Badge className={part.status === 'RECEIVED' ? 'bg-[#DFF6F1] text-[#0F766E]' : 'bg-amber-50 text-amber-700'}>
+                        {part.status === 'RECEIVED' ? 'Recibido' : 'Solicitado'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+
+            <div className="grid gap-2 border-t border-[#E2E8F0] pt-4">
+              {order.status === 'OPEN' ? (
                 <>
-                  <Button
-                    onClick={() => handleSchedule(activeSelectedOrder.id)}
-                    disabled={scheduleOrderMutation.isPending}
-                    className="w-full"
-                    variant="secondary"
-                  >
-                    <Clock className="w-4 h-4 mr-2" />
-                    Programar
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      handleCancel(
-                        activeSelectedOrder.id,
-                        "Cancelado por usuario",
-                      )
-                    }
-                    disabled={cancelOrderMutation.isPending}
-                    className="w-full"
-                    variant="secondary"
-                  >
-                    Cancelar Orden
-                  </Button>
+                  <Button onClick={onSchedule}>Programar</Button>
+                  <Button variant="secondary" onClick={onCancel}>Cancelar</Button>
                 </>
-              )}
-
-              {activeSelectedOrder.status === "SCHEDULED" && (
-                <Button
-                  onClick={() => handleStart(activeSelectedOrder.id)}
-                  disabled={startOrderMutation.isPending}
-                  className="w-full"
-                >
-                  <Wrench className="w-4 h-4 mr-2" />
-                  Iniciar Mantenimiento
-                </Button>
-              )}
-
-              {activeSelectedOrder.status === "IN_PROGRESS" && (
-                <Button
-                  onClick={() =>
-                    handleComplete(
-                      activeSelectedOrder.id,
-                      activeSelectedOrder.openingOdometer + 100,
-                    )
-                  }
-                  disabled={completeOrderMutation.isPending}
-                  className="w-full"
-                >
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Completar
-                </Button>
-              )}
+              ) : null}
+              {order.status === 'SCHEDULED' ? (
+                <>
+                  <Button onClick={onStart}>Iniciar mantenimiento</Button>
+                  <Button variant="secondary" onClick={onCancel}>Cancelar</Button>
+                </>
+              ) : null}
+              {order.status === 'IN_PROGRESS' ? (
+                <>
+                  <Button onClick={onJob}>Registrar trabajo</Button>
+                  <Button variant="secondary" onClick={onParts}>Solicitar repuesto</Button>
+                  <Button variant="secondary" onClick={onReceiveParts} disabled={requestedParts.length === 0}>Recibir repuesto</Button>
+                  <Button variant="secondary" onClick={onCost}>Registrar costo</Button>
+                  <Button onClick={onComplete}>Completar</Button>
+                  <Button variant="secondary" onClick={onCancel}>Cancelar</Button>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
-      )}
+      </aside>
     </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-medium text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function MaintenanceOrderDialog({
+  type,
+  order,
+  isSubmitting,
+  onClose,
+  onCreate,
+  onSchedule,
+  onComplete,
+  onCancel,
+  onJob,
+  onParts,
+  onReceiveParts,
+  onCost,
+}: {
+  type: OrderDialog;
+  order: MaintenanceOrder | null;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onCreate: (payload: CreateMaintenanceOrderPayload) => void;
+  onSchedule: (payload: ScheduleMaintenanceOrderPayload) => void;
+  onComplete: (payload: CompleteMaintenanceOrderPayload) => void;
+  onCancel: (payload: CancelMaintenanceOrderPayload) => void;
+  onJob: (payload: RegisterJobPayload) => void;
+  onParts: (payload: RequestPartsPayload) => void;
+  onReceiveParts: (payload: ReceivePartsPayload) => void;
+  onCost: (payload: RegisterCostPayload) => void;
+}) {
+  const [form, setForm] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (type) setForm({});
+  }, [type]);
+
+  if (!type) return null;
+  const set = (key: string, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const submit = () => {
+    if (type === 'create-order') {
+      onCreate({
+        vehicleId: Number(form.vehicleId),
+        maintenanceType: (form.maintenanceType || 'PREVENTIVE') as MaintenanceType,
+        priority: (form.priority || 'MEDIUM') as MaintenancePriority,
+        reason: (form.reason || 'SCHEDULED') as MaintenanceReason,
+        openingOdometer: Number(form.openingOdometer),
+        scheduledTimelapseDays: Number(form.scheduledTimelapseDays),
+        technicianId: form.technicianId ? Number(form.technicianId) : undefined,
+      });
+    }
+    if (type === 'schedule') onSchedule({ scheduledTimelapseDays: Number(form.scheduledTimelapseDays) });
+    if (type === 'complete') onComplete({ closingOdometer: Number(form.closingOdometer) });
+    if (type === 'cancel') onCancel({ reason: form.reason ?? '' });
+    if (type === 'job') onJob({ description: form.description ?? '', completed: form.completed === 'true' });
+    if (type === 'parts') onParts({ partName: form.partName ?? '', quantity: Number(form.quantity) });
+    if (type === 'receive-parts') onReceiveParts({ partsRequestId: Number(form.partsRequestId) });
+    if (type === 'cost') onCost({ amount: Number(form.amount), currency: form.currency || 'PEN' });
+  };
+
+  const titleByType: Record<Exclude<OrderDialog, null>, string> = {
+    'create-order': 'Crear orden de mantenimiento',
+    schedule: 'Programar orden',
+    complete: 'Completar orden',
+    cancel: 'Cancelar orden',
+    job: 'Registrar trabajo',
+    parts: 'Solicitar repuesto',
+    'receive-parts': 'Recibir repuesto',
+    cost: 'Registrar costo',
+  };
+
+  return (
+    <Dialog open={Boolean(type)} title={titleByType[type]} onClose={onClose}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {type === 'create-order' ? (
+          <>
+            <Field label="Vehiculo ID" value={form.vehicleId} onChange={(value) => set('vehicleId', value)} type="number" />
+            <Field label="Odometro inicial" value={form.openingOdometer} onChange={(value) => set('openingOdometer', value)} type="number" />
+            <EnumField label="Tipo" value={form.maintenanceType || 'PREVENTIVE'} options={typeLabels} onChange={(value) => set('maintenanceType', value)} />
+            <EnumField label="Prioridad" value={form.priority || 'MEDIUM'} options={priorityLabels} onChange={(value) => set('priority', value)} />
+            <EnumField label="Razon" value={form.reason || 'SCHEDULED'} options={reasonLabels} onChange={(value) => set('reason', value)} />
+            <Field label="Dias programados" value={form.scheduledTimelapseDays} onChange={(value) => set('scheduledTimelapseDays', value)} type="number" />
+            <Field label="Tecnico ID" value={form.technicianId} onChange={(value) => set('technicianId', value)} type="number" />
+          </>
+        ) : null}
+        {type === 'schedule' ? <Field label="Dias programados" value={form.scheduledTimelapseDays} onChange={(value) => set('scheduledTimelapseDays', value)} type="number" /> : null}
+        {type === 'complete' ? <Field label="Odometro final" value={form.closingOdometer} onChange={(value) => set('closingOdometer', value)} type="number" /> : null}
+        {type === 'cancel' ? <Field label="Motivo" value={form.reason} onChange={(value) => set('reason', value)} /> : null}
+        {type === 'job' ? (
+          <>
+            <Field label="Descripcion" value={form.description} onChange={(value) => set('description', value)} />
+            <EnumField label="Completado" value={form.completed || 'false'} options={{ false: 'Pendiente', true: 'Completado' }} onChange={(value) => set('completed', value)} />
+          </>
+        ) : null}
+        {type === 'parts' ? (
+          <>
+            <Field label="Repuesto" value={form.partName} onChange={(value) => set('partName', value)} />
+            <Field label="Cantidad" value={form.quantity} onChange={(value) => set('quantity', value)} type="number" />
+          </>
+        ) : null}
+        {type === 'receive-parts' ? (
+          <label className="space-y-1 text-sm font-medium text-slate-700 sm:col-span-2">
+            Solicitud
+            <Select value={form.partsRequestId ?? ''} onChange={(event) => set('partsRequestId', event.target.value)} className="w-full">
+              <option value="">Selecciona solicitud</option>
+              {(order?.partsRequests ?? []).filter((part) => part.status === 'REQUESTED').map((part) => (
+                <option key={part.id} value={part.id}>{part.partName} x{part.quantity}</option>
+              ))}
+            </Select>
+          </label>
+        ) : null}
+        {type === 'cost' ? (
+          <>
+            <Field label="Monto" value={form.amount} onChange={(value) => set('amount', value)} type="number" />
+            <Field label="Moneda" value={form.currency || 'PEN'} onChange={(value) => set('currency', value)} />
+          </>
+        ) : null}
+      </div>
+      <div className="mt-6 flex justify-end gap-3 border-t border-[#E2E8F0] pt-4">
+        <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+        <Button onClick={submit} disabled={isSubmitting}>Guardar</Button>
+      </div>
+    </Dialog>
+  );
+}
+
+function SchedulesView({
+  scheduleSearch,
+  setScheduleSearch,
+  schedule,
+  isLoading,
+  isError,
+  onSearch,
+  onCreate,
+  onActivate,
+  onDeactivate,
+  onEvaluate,
+  onEditRules,
+  onRetry,
+}: {
+  scheduleSearch: string;
+  setScheduleSearch: (value: string) => void;
+  schedule: MaintenanceSchedule | null | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  onSearch: () => void;
+  onCreate: () => void;
+  onActivate: () => void;
+  onDeactivate: () => void;
+  onEvaluate: () => void;
+  onEditRules: () => void;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <Card className="border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+        El backend actual no expone listado de programaciones. Usa busqueda por ID o crea una nueva programacion.
+      </Card>
+      <Card className="flex flex-col gap-3 p-5 md:flex-row md:items-center">
+        <Input value={scheduleSearch} onChange={(event) => setScheduleSearch(event.target.value)} placeholder="ID de programacion" type="number" />
+        <Button onClick={onSearch}>Consultar</Button>
+        <Button variant="secondary" onClick={onCreate}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Crear programacion
+        </Button>
+      </Card>
+      {isError ? <ApiErrorState title="Programacion no encontrada" onRetry={onRetry} /> : null}
+      {isLoading ? <Skeleton className="h-40" /> : null}
+      {schedule ? (
+        <Card className="p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-950">Programacion #{schedule.id}</h2>
+              <p className="mt-1 text-sm text-slate-500">Vehiculo #{schedule.vehicleId}</p>
+            </div>
+            <Badge className={schedule.status === 'ACTIVE' ? 'bg-[#DFF6F1] text-[#0F766E]' : 'bg-slate-100 text-slate-700'}>
+              {schedule.status === 'ACTIVE' ? 'Activa' : 'Inactiva'}
+            </Badge>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <Info label="Ultima evaluacion" value={formatDate(schedule.lastEvaluationAt)} />
+            <Info label="Proxima evaluacion" value={formatDate(schedule.nextEvaluationAt)} />
+          </div>
+          <div className="mt-5">
+            <h3 className="mb-3 text-sm font-semibold text-slate-950">Reglas</h3>
+            <div className="grid gap-2 md:grid-cols-2">
+              {(schedule.rules ?? []).map((rule, index) => (
+                <div key={`${rule.name}-${index}`} className="rounded-lg border border-[#E2E8F0] p-3 text-sm">
+                  <p className="font-medium text-slate-950">{rule.name}</p>
+                  <p className="mt-1 text-slate-500">{formatKilometers(rule.thresholdKm)} · {rule.thresholdDays ?? '-'} dias</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-[#E2E8F0] pt-4">
+            {schedule.status === 'ACTIVE' ? <Button variant="secondary" onClick={onDeactivate}>Desactivar</Button> : <Button onClick={onActivate}>Activar</Button>}
+            <Button variant="secondary" onClick={onEvaluate}>Evaluar</Button>
+            <Button variant="secondary" onClick={onEditRules}>Actualizar reglas</Button>
+          </div>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+function MaintenanceScheduleDialog({
+  type,
+  schedule,
+  isSubmitting,
+  onClose,
+  onCreate,
+  onRules,
+}: {
+  type: ScheduleDialogType;
+  schedule: MaintenanceSchedule | null | undefined;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onCreate: (payload: CreateMaintenanceSchedulePayload) => void;
+  onRules: (payload: UpdateMaintenanceRulesPayload) => void;
+}) {
+  const [vehicleId, setVehicleId] = useState('');
+  const [rules, setRules] = useState<MaintenanceRule[]>(schedule?.rules?.length ? schedule.rules : [emptyRule()]);
+
+  useEffect(() => {
+    if (type === 'create-schedule') {
+      setVehicleId('');
+      setRules([emptyRule()]);
+    }
+    if (type === 'rules') {
+      setRules(schedule?.rules?.length ? schedule.rules : [emptyRule()]);
+    }
+  }, [schedule, type]);
+
+  if (!type) return null;
+  const updateRule = (index: number, field: keyof MaintenanceRule, value: string) => {
+    setRules((current) => current.map((rule, ruleIndex) => ruleIndex === index ? { ...rule, [field]: field === 'name' ? value : Number(value) } : rule));
+  };
+  const submit = () => {
+    const payload = { rules: rules.filter((rule) => rule.name.trim()) };
+    if (type === 'create-schedule') onCreate({ vehicleId: Number(vehicleId), ...payload });
+    if (type === 'rules') onRules(payload);
+  };
+  return (
+    <Dialog open={Boolean(type)} title={type === 'create-schedule' ? 'Crear programacion' : 'Actualizar reglas'} onClose={onClose}>
+      <div className="space-y-4">
+        {type === 'create-schedule' ? <Field label="Vehiculo ID" value={vehicleId} onChange={setVehicleId} type="number" /> : null}
+        <div className="space-y-3">
+          {rules.map((rule, index) => (
+            <div key={index} className="grid gap-3 rounded-lg border border-[#E2E8F0] p-3 md:grid-cols-3">
+              <Input value={rule.name} onChange={(event) => updateRule(index, 'name', event.target.value)} placeholder="Nombre" />
+              <Input value={rule.thresholdKm} onChange={(event) => updateRule(index, 'thresholdKm', event.target.value)} placeholder="Km" type="number" />
+              <Input value={rule.thresholdDays} onChange={(event) => updateRule(index, 'thresholdDays', event.target.value)} placeholder="Dias" type="number" />
+            </div>
+          ))}
+        </div>
+        <Button variant="secondary" onClick={() => setRules((current) => [...current, emptyRule()])}>Agregar regla</Button>
+      </div>
+      <div className="mt-6 flex justify-end gap-3 border-t border-[#E2E8F0] pt-4">
+        <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+        <Button onClick={submit} disabled={isSubmitting}>Guardar</Button>
+      </div>
+    </Dialog>
+  );
+}
+
+function Field({ label, value, onChange, type = 'text' }: { label: string; value?: string | number; onChange: (value: string) => void; type?: string }) {
+  return (
+    <label className="space-y-1 text-sm font-medium text-slate-700">
+      {label}
+      <Input value={value ?? ''} type={type} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function EnumField({ label, value, options, onChange }: { label: string; value: string; options: Record<string, string>; onChange: (value: string) => void }) {
+  return (
+    <label className="space-y-1 text-sm font-medium text-slate-700">
+      {label}
+      <Select value={value} onChange={(event) => onChange(event.target.value)} className="w-full">
+        {Object.entries(options).map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>{optionLabel}</option>
+        ))}
+      </Select>
+    </label>
   );
 }
