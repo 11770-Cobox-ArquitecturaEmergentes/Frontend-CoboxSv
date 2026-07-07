@@ -3,3 +3,10 @@ export type Report = {
   name: string;
   type: 'operations' | 'incidents' | 'maintenance';
 };
+
+export type IncidentReportMetric = {
+  id: number;
+  metricName: string;
+  metricValue: string;
+  aggregatedAt: string;
+};
