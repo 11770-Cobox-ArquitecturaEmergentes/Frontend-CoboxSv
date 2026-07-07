@@ -45,6 +45,20 @@ export type MaintenanceOrderSummary = {
   technicianId: number | null;
 };
 
+export type DriverSummary = {
+  id: number;
+  email: string | null;
+  licenceNumber: string | null;
+  status: string | null;
+};
+
+export type VehicleSummary = {
+  id: number;
+  plateNumber: string | null;
+  capacityKg: number | null;
+  status: string | null;
+};
+
 export type FleetDashboard = {
   totalVehicles: number;
   totalDrivers: number;
@@ -80,5 +94,23 @@ export type OperationsDashboard = {
   deliveries: DeliveriesDashboard;
   incidents: IncidentsDashboard;
   maintenance: MaintenanceDashboard;
+  degradedSections: DegradedSection[];
+};
+
+export type RouteOverview = {
+  generatedAt: string;
+  route: RouteSummary;
+  driver: DriverSummary | null;
+  vehicle: VehicleSummary | null;
+  orders: OrderSummary[];
+  finishedOrderIds: number[];
+  degradedSections: DegradedSection[];
+};
+
+export type VehicleHealth = {
+  generatedAt: string;
+  vehicle: VehicleSummary;
+  openMaintenanceOrders: MaintenanceOrderSummary[];
+  maintenanceHistory: MaintenanceOrderSummary[];
   degradedSections: DegradedSection[];
 };

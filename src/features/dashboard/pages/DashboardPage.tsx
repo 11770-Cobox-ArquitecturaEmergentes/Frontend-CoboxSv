@@ -1,35 +1,20 @@
 import { AlertCircle, ClipboardList, RefreshCw, Route, Truck, Users, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Badge, Button, Card, Skeleton } from '@/components/ui';
+import { useState } from 'react';
+import { Button, Card, Skeleton } from '@/components/ui';
 import { ApiErrorState } from '@/components/shared';
 import { cn } from '@/utils';
-import { DashboardKpiCard, DashboardStatusChart, DegradedSectionsBanner } from '../components';
+import {
+  DashboardKpiCard,
+  DashboardStatusBadge,
+  DashboardStatusChart,
+  DegradedSectionsBanner,
+  RouteOverviewPanel,
+  VehicleHealthPanel,
+} from '../components';
 import { useDashboardOperations } from '../hooks';
 import type { IncidentSummary, MaintenanceOrderSummary, OrderSummary, RouteSummary } from '../types';
-import { formatCurrency, formatDateTime, formatStatusLabel, formatWeight } from '../utils/formatters';
-
-const statusTone: Record<string, string> = {
-  ACTIVE: 'bg-teal-50 text-[#0F766E]',
-  AVAILABLE: 'bg-teal-50 text-[#0F766E]',
-  COMPLETED: 'bg-teal-50 text-[#0F766E]',
-  DELIVERED: 'bg-teal-50 text-[#0F766E]',
-  OPEN: 'bg-amber-50 text-[#D97706]',
-  PENDING: 'bg-amber-50 text-[#D97706]',
-  READY_FOR_DISPATCH: 'bg-blue-50 text-[#2563EB]',
-  IN_PROGRESS: 'bg-blue-50 text-[#2563EB]',
-  IN_TRANSIT: 'bg-blue-50 text-[#2563EB]',
-  ESCALATED: 'bg-red-50 text-[#EF4444]',
-  CANCELLED: 'bg-red-50 text-[#EF4444]',
-};
-
-function StatusBadge({ value }: { value: string | null | undefined }) {
-  const status = value ?? 'UNKNOWN';
-  return (
-    <Badge className={cn('whitespace-nowrap bg-slate-100 text-slate-700', statusTone[status])}>
-      {formatStatusLabel(status)}
-    </Badge>
-  );
-}
+import { formatCurrency, formatDateTime, formatWeight } from '../utils/formatters';
 
 function DashboardSkeleton() {
   return (
@@ -78,25 +63,30 @@ function SectionCard({
   );
 }
 
-function ActiveRoutesList({ routes }: { routes: RouteSummary[] }) {
+function ActiveRoutesList({ routes, onSelectRoute }: { routes: RouteSummary[]; onSelectRoute: (routeId: number) => void }) {
   return (
     <SectionCard title="Rutas activas" empty={routes.length === 0}>
       {routes.map((route) => (
-        <div key={route.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+        <button
+          key={route.id}
+          type="button"
+          className="flex w-full gap-3 py-3 text-left transition-colors first:pt-0 last:pb-0 hover:bg-slate-50"
+          onClick={() => onSelectRoute(route.id)}
+        >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#2563EB]">
             <Route className="h-4 w-4" aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium text-slate-950">{route.title ?? `Ruta #${route.id}`}</p>
-              <StatusBadge value={route.status} />
+              <DashboardStatusBadge value={route.status} />
             </div>
             <p className="mt-1 text-sm text-slate-500">
               Vehiculo #{route.vehicleId ?? '-'} · Conductor #{route.driverId ?? '-'} ·{' '}
               {route.finishedOrderIds.length}/{route.orderIds.length} ordenes finalizadas
             </p>
           </div>
-        </div>
+        </button>
       ))}
     </SectionCard>
   );
@@ -113,7 +103,7 @@ function RecentOrdersList({ orders }: { orders: OrderSummary[] }) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium text-slate-950">Orden #{order.id}</p>
-              <StatusBadge value={order.status} />
+              <DashboardStatusBadge value={order.status} />
             </div>
             <p className="mt-1 text-sm text-slate-500">
               {order.city ?? 'Ciudad no registrada'}, {order.country ?? 'Pais no registrado'} ·{' '}
@@ -137,8 +127,8 @@ function OpenIncidentsList({ incidents }: { incidents: IncidentSummary[] }) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium text-slate-950">{incident.type ?? `Incidente #${incident.id}`}</p>
-              <StatusBadge value={incident.status} />
-              <StatusBadge value={incident.severity} />
+              <DashboardStatusBadge value={incident.status} />
+              <DashboardStatusBadge value={incident.severity} />
             </div>
             <p className="mt-1 text-sm text-slate-500">
               Reportado {formatDateTime(incident.reportedAt)} · Responsable #{incident.responsibleUserId ?? '-'}
@@ -161,8 +151,8 @@ function OpenMaintenanceList({ orders }: { orders: MaintenanceOrderSummary[] }) 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium text-slate-950">{order.maintenanceType ?? `Orden #${order.id}`}</p>
-              <StatusBadge value={order.status} />
-              <StatusBadge value={order.priority} />
+              <DashboardStatusBadge value={order.status} />
+              <DashboardStatusBadge value={order.priority} />
             </div>
             <p className="mt-1 text-sm text-slate-500">
               Vehiculo #{order.vehicleId ?? '-'} · Tecnico #{order.technicianId ?? '-'} ·{' '}
@@ -177,7 +167,19 @@ function OpenMaintenanceList({ orders }: { orders: MaintenanceOrderSummary[] }) 
 
 export function DashboardPage() {
   const dashboardQuery = useDashboardOperations();
+  const [selectedRouteId, setSelectedRouteId] = useState<number>();
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number>();
   const data = dashboardQuery.data;
+
+  const closeDetailsPanel = () => {
+    setSelectedRouteId(undefined);
+    setSelectedVehicleId(undefined);
+  };
+
+  const selectRoute = (routeId: number) => {
+    setSelectedRouteId(routeId);
+    setSelectedVehicleId(undefined);
+  };
 
   if (dashboardQuery.isLoading) return <DashboardSkeleton />;
 
@@ -226,11 +228,17 @@ export function DashboardPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <ActiveRoutesList routes={data.fleet.activeRoutes} />
+        <ActiveRoutesList routes={data.fleet.activeRoutes} onSelectRoute={selectRoute} />
         <RecentOrdersList orders={data.deliveries.recentOrders} />
         <OpenIncidentsList incidents={data.incidents.openIncidents} />
         <OpenMaintenanceList orders={data.maintenance.openOrders} />
       </div>
+
+      {selectedRouteId !== undefined && selectedVehicleId === undefined ? (
+        <RouteOverviewPanel routeId={selectedRouteId} onClose={closeDetailsPanel} onOpenVehicle={setSelectedVehicleId} />
+      ) : null}
+
+      {selectedVehicleId !== undefined ? <VehicleHealthPanel vehicleId={selectedVehicleId} onClose={closeDetailsPanel} /> : null}
     </div>
   );
 }
