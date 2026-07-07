@@ -18,13 +18,19 @@ function resolveUserName(users: SupportUser[], id: string | null): string {
   return found ? found.name : id;
 }
 
+function shortId(id: unknown): string {
+  if (id == null) return '—';
+  const str = String(id);
+  return str.length > 8 ? `${str.slice(0, 8)}…` : str;
+}
+
 export function TicketRow({ ticket, users, onView, onEdit, onDelete }: TicketRowProps) {
   const assignedName = resolveUserName(users, ticket.assignedTo);
 
   return (
     <tr className="border-t border-[#E2E8F0] transition-colors hover:bg-slate-50">
       <td className="px-4 py-3 align-top">
-        <span className="font-mono text-xs text-[#64748B]">{ticket.id.slice(0, 8)}…</span>
+        <span className="font-mono text-xs text-[#64748B]">{shortId(ticket.id)}</span>
       </td>
       <td className="px-4 py-3 align-top">
         <p className="font-semibold text-slate-950">{ticket.title}</p>
@@ -67,7 +73,7 @@ export function TicketMobileCard({ ticket, users, onView, onEdit, onDelete }: Ti
   return (
     <div className="rounded-lg border border-[#E2E8F0] bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-xs text-[#64748B]">{ticket.id.slice(0, 8)}…</span>
+        <span className="font-mono text-xs text-[#64748B]">{shortId(ticket.id)}</span>
         <CategoryBadge category={ticket.category} />
       </div>
       <p className="mt-2 font-semibold text-slate-950">{ticket.title}</p>

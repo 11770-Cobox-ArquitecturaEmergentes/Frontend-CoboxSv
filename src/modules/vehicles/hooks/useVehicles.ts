@@ -19,3 +19,15 @@ export function useCreateVehicle() {
     },
   });
 }
+
+export function useUpdateVehicle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ vehicleId, payload }: { vehicleId: string; payload: CreateVehiclePayload }) =>
+      fleetService.updateVehicle(vehicleId, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+    },
+  });
+}

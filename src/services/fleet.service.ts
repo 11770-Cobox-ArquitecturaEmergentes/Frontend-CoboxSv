@@ -66,30 +66,9 @@ type BackendRouteResource = {
   routeStatus: 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED';
 };
 
-// ── Local Storage Override Mechanism (Simulating Vehicle Status Updates) ──
+// ── Local Storage History (fallback mientras el backend no exponga historial) ──
 
-const VEHICLE_STATUS_OVERRIDES_KEY = 'cobox_vehicle_status_overrides';
 const VEHICLE_STATUS_HISTORY_KEY = 'cobox_vehicle_status_history';
-
-function getVehicleStatusOverride(vehicleId: string): VehicleStatus | null {
-  try {
-    const overrides = localStorage.getItem(VEHICLE_STATUS_OVERRIDES_KEY);
-    if (!overrides) return null;
-    const parsed = JSON.parse(overrides);
-    return parsed[vehicleId] || null;
-  } catch {
-    return null;
-  }
-}
-
-function saveVehicleStatusOverride(vehicleId: string, status: VehicleStatus) {
-  try {
-    const overrides = localStorage.getItem(VEHICLE_STATUS_OVERRIDES_KEY);
-    const parsed = overrides ? JSON.parse(overrides) : {};
-    parsed[vehicleId] = status;
-    localStorage.setItem(VEHICLE_STATUS_OVERRIDES_KEY, JSON.stringify(parsed));
-  } catch { /* ignore */ }
-}
 
 export type VehicleStatusLog = {
   status: VehicleStatus;
@@ -144,14 +123,19 @@ const VEHICLE_STATUS_TO_FRONTEND: Record<string, VehicleStatus> = {
   OUT_OF_SERVICE: 'out_of_service',
 };
 
+const VEHICLE_STATUS_TO_BACKEND: Record<VehicleStatus, BackendVehicleResource['vehicleStatus']> = {
+  operational: 'OPERATIONAL',
+  maintenance: 'IN_MAINTENANCE',
+  out_of_service: 'OUT_OF_SERVICE',
+};
+
 function toVehicle(backend: BackendVehicleResource): Vehicle {
-  const localOverride = getVehicleStatusOverride(String(backend.id));
   return {
     id: String(backend.id),
     plate: backend.plateNumber,
     type: backend.capacityKg > 5000 ? 'Camión de Carga Pesada' : 'Furgoneta de Reparto',
     capacity: backend.capacityKg,
-    status: localOverride || (VEHICLE_STATUS_TO_FRONTEND[backend.vehicleStatus] ?? 'operational'),
+    status: VEHICLE_STATUS_TO_FRONTEND[backend.vehicleStatus] ?? 'operational',
     year: new Date().getFullYear() - 2,
     brand: backend.capacityKg > 5000 ? 'Volvo' : 'Toyota',
     model: backend.capacityKg > 5000 ? 'FH16' : 'Hiace',
@@ -233,16 +217,20 @@ export const fleetService = {
     return toVehicle(data);
   },
 
+  async updateVehicle(vehicleId: string, payload: CreateVehiclePayload): Promise<Vehicle> {
+    const { data } = await fleetApi.put<BackendVehicleResource>(`/api/v1/vehicles/${vehicleId}`, toCreateVehicleRequest(payload));
+    return toVehicle(data);
+  },
+
   async updateVehicleStatus(vehicleId: string, status: VehicleStatus, reason: string): Promise<Vehicle> {
-    // Simulating status change via local overrides
-    saveVehicleStatusOverride(vehicleId, status);
+    const body = { vehicleStatus: VEHICLE_STATUS_TO_BACKEND[status] };
+    const { data } = await fleetApi.patch<BackendVehicleResource>(`/api/v1/vehicles/${vehicleId}/status`, body);
     saveVehicleStatusHistoryLocal(vehicleId, {
       status,
       changedAt: new Date().toISOString(),
       reason: reason || 'Cambio de estado general.',
     });
-    // Return enriched vehicle
-    return this.getVehicleById(vehicleId);
+    return toVehicle(data);
   },
 
   async getVehicleStatusHistory(vehicleId: string): Promise<VehicleStatusLog[]> {

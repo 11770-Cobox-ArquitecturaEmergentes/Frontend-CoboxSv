@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, Button, Input, Select } from "@/components/ui";
 import { vehicleSchema } from "../schemas/vehicle.schema";
 import type { CreateVehiclePayload, Vehicle } from "@/modules/fleet.types";
@@ -18,6 +18,16 @@ const emptyVehicle: CreateVehiclePayload = {
   model: "",
 };
 
+function vehicleToForm(vehicle: Vehicle | null | undefined): CreateVehiclePayload {
+  if (!vehicle) return { ...emptyVehicle };
+  return {
+    plate: vehicle.plate,
+    capacity: vehicle.capacity,
+    status: vehicle.status,
+    model: vehicle.model,
+  };
+}
+
 export function VehicleFormDialog({
   open,
   initialVehicle,
@@ -25,10 +35,15 @@ export function VehicleFormDialog({
   onClose,
   onSubmit,
 }: VehicleFormDialogProps) {
-  const [form, setForm] = useState<CreateVehiclePayload>(
-    initialVehicle ?? emptyVehicle,
-  );
+  const [form, setForm] = useState<CreateVehiclePayload>(vehicleToForm(initialVehicle));
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setForm(vehicleToForm(initialVehicle));
+      setError(null);
+    }
+  }, [open, initialVehicle]);
 
   const updateField = (field: keyof CreateVehiclePayload, value: string) => {
     setForm((current) => ({

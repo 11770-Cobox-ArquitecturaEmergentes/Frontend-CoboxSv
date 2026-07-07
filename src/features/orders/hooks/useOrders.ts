@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ordersService } from '../services/ordersService';
 import { useRoutes } from '@/modules/routes';
@@ -27,13 +28,16 @@ export function useOrders() {
     ]);
   };
 
-  // Cruce de información
+  // Cruce de información — memoizado para evitar recalcular en cada render
+  // y mantener una referencia estable del array (evita re-renders en cascada
+  // y que se cuelgue la página al hacer click en "Acciones").
   const data = ordersQuery.data;
   const routes = routesQuery.data;
   const drivers = driversQuery.data;
   const vehicles = vehiclesQuery.data;
 
-  const enrichedOrders: Order[] = (data || []).map((order) => {
+  const enrichedOrders: Order[] = useMemo(() => {
+    return (data || []).map((order) => {
     // Buscar si esta orden pertenece a alguna ruta
     const assignedRoute = (routes || []).find((r) => {
       // route.ordersIds contiene orderId en formato { orderId: number } o similar según API
@@ -69,7 +73,8 @@ export function useOrders() {
       driverName,
       vehiclePlate,
     };
-  });
+    });
+  }, [data, routes, drivers, vehicles]);
 
   return {
     data: enrichedOrders,

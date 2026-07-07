@@ -11,7 +11,7 @@ import { Badge, Button, Card, Input, Select, Skeleton, useToast } from '@/compon
 import { ApiErrorState } from '@/components/shared';
 import type { CreateVehiclePayload, Vehicle, VehicleStatus } from '@/modules/fleet.types';
 import { isAxiosError } from 'axios';
-import { useCreateVehicle, useVehicles } from '../hooks';
+import { useCreateVehicle, useUpdateVehicle, useVehicles } from '../hooks';
 import { VehicleFormDialog, VehicleStatusBadge } from '../components';
 
 const columnHelper = createColumnHelper<Vehicle>();
@@ -34,6 +34,7 @@ export function VehiclesPage() {
   const { toast } = useToast();
   const vehiclesQuery = useVehicles();
   const createVehicle = useCreateVehicle();
+  const updateVehicle = useUpdateVehicle();
 
   const vehicles = useMemo(() => vehiclesQuery.data ?? [], [vehiclesQuery.data]);
 
@@ -64,6 +65,30 @@ export function VehiclesPage() {
   }, [vehicles]);
 
   const handleSubmit = (payload: CreateVehiclePayload) => {
+    const isEditing = Boolean(selectedVehicle);
+    console.info('[vehicles] handleSubmit', { isEditing, selectedVehicleId: selectedVehicle?.id ?? null });
+
+    if (isEditing && selectedVehicle) {
+      console.info('[vehicles] calling updateVehicle');
+      updateVehicle.mutate(
+        { vehicleId: selectedVehicle.id, payload },
+        {
+          onSuccess: () => {
+            setIsFormOpen(false);
+            setSelectedVehicle(null);
+            toast({ title: 'Vehiculo actualizado correctamente', type: 'success' });
+          },
+          onError: (error) => {
+            const message = isAxiosError(error)
+              ? (error.response?.data as { message?: string })?.message ?? 'Error del servidor'
+              : 'No se pudo actualizar el vehiculo';
+            toast({ title: message, type: 'error' });
+          },
+        },
+      );
+      return;
+    }
+
     createVehicle.mutate(payload, {
       onSuccess: () => {
         setIsFormOpen(false);
@@ -241,8 +266,11 @@ export function VehiclesPage() {
       <VehicleFormDialog
         open={isFormOpen}
         initialVehicle={selectedVehicle}
-        isSubmitting={createVehicle.isPending}
-        onClose={() => setIsFormOpen(false)}
+        isSubmitting={createVehicle.isPending || updateVehicle.isPending}
+        onClose={() => {
+          setIsFormOpen(false);
+          setSelectedVehicle(null);
+        }}
         onSubmit={handleSubmit}
       />
 

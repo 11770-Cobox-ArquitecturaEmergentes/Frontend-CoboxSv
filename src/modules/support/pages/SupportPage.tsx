@@ -52,7 +52,7 @@ export function SupportPage() {
       const matchesSearch =
         !normalized ||
         t.title.toLowerCase().includes(normalized) ||
-        t.id.toLowerCase().includes(normalized) ||
+        String(t.id).toLowerCase().includes(normalized) ||
         (t.assignedTo ?? '').toLowerCase().includes(normalized);
       const matchesStatus = status === 'ALL' || t.status === status;
       const matchesPriority = priority === 'ALL' || t.priority === priority;

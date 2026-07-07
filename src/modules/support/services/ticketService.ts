@@ -7,7 +7,7 @@ import type {
 } from '@/modules/support/types';
 
 export const supportApi = axios.create({
-  baseURL: import.meta.env.VITE_SUPPORT_API_URL ?? 'http://localhost:8084',
+  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost',
   headers: { 'Content-Type': 'application/json' },
   validateStatus: (status) => status < 400,
 });
