@@ -1,12 +1,18 @@
 import { useMemo, useState } from 'react';
 import { isAxiosError } from 'axios';
-import { BrainCircuit, RefreshCw, SearchX } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, ExternalLink, RefreshCw, SearchX, XCircle } from 'lucide-react';
 import { ApiErrorState } from '@/components/shared';
 import { Button, Card, Select, Skeleton } from '@/components/ui';
 import { cn } from '@/utils';
 import { AiAlertCard, CategoryProgress, StatsCard } from '../components';
-import { useDashboard, useEvidenceAnalysis, useSmartVisionAlerts } from '../hooks';
-import type { AiAlert, AlertStatus, EvidenceAnalysis } from '../types';
+import {
+  useDashboard,
+  useEvidenceAnalysis,
+  useReviewEvidenceAnalysis,
+  useSmartVisionAlerts,
+  useSmartVisionAnalyses,
+} from '../hooks';
+import type { AiAlert, AlertStatus, AnalysisStatus, EvidenceAnalysis, SmartVisionAnalysisOverview } from '../types';
 
 const statusOptions: Array<{ value: '' | AlertStatus; label: string }> = [
   { value: '', label: 'Todas' },
@@ -24,6 +30,22 @@ const analysisLabels: Record<EvidenceAnalysis['status'], string> = {
   RECAPTURE_REQUIRED: 'Requiere recaptura',
   FRAUD_SUSPECTED: 'Fraude sospechado',
   DEGRADED: 'Degradada',
+};
+
+const analysisStatusOptions: Array<{ value: '' | AnalysisStatus; label: string }> = [
+  { value: '', label: 'Todas' },
+  { value: 'PENDING', label: 'Pendientes' },
+  { value: 'PROCESSING', label: 'Procesando' },
+  { value: 'COMPLETED', label: 'Completadas' },
+  { value: 'FAILED', label: 'Fallidas' },
+  { value: 'REVIEW_REQUIRED', label: 'Requieren revision' },
+  { value: 'FRAUD_SUSPECTED', label: 'Riesgo alto' },
+];
+
+const reviewLabels: Record<string, string> = {
+  PENDING: 'Pendiente',
+  ACCEPTED: 'Aceptada',
+  REJECTED: 'Rechazada',
 };
 
 function SmartVisionSkeleton() {
@@ -162,12 +184,172 @@ function AnalysisDetail({
   );
 }
 
+function EvidenceInbox({
+  analyses,
+  isReviewing,
+  onReview,
+  onOpenAlert,
+}: {
+  analyses: SmartVisionAnalysisOverview[];
+  isReviewing: boolean;
+  onReview: (analysis: EvidenceAnalysis, reviewStatus: 'ACCEPTED' | 'REJECTED') => void;
+  onOpenAlert: (alert: AiAlert) => void;
+}) {
+  if (analyses.length === 0) {
+    return (
+      <Card className="flex min-h-72 flex-col items-center justify-center p-8 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-[#64748B]">
+          <SearchX className="h-6 w-6" />
+        </div>
+        <h3 className="mt-4 text-base font-semibold text-[#111827]">Sin evidencias IA</h3>
+        <p className="mt-2 max-w-md text-sm text-[#6B7280]">
+          Las evidencias confirmadas apareceran cuando SmartVision complete o registre su analisis.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {analyses.map((item) => (
+        <EvidenceAnalysisCard
+          key={item.analysis.clientEvidenceId}
+          item={item}
+          isReviewing={isReviewing}
+          onReview={onReview}
+          onOpenAlert={onOpenAlert}
+        />
+      ))}
+    </div>
+  );
+}
+
+function EvidenceAnalysisCard({
+  item,
+  isReviewing,
+  onReview,
+  onOpenAlert,
+}: {
+  item: SmartVisionAnalysisOverview;
+  isReviewing: boolean;
+  onReview: (analysis: EvidenceAnalysis, reviewStatus: 'ACCEPTED' | 'REJECTED') => void;
+  onOpenAlert: (alert: AiAlert) => void;
+}) {
+  const { analysis } = item;
+  const incidentId = analysis.sourceType === 'INCIDENT' ? analysis.sourceId : null;
+  const primaryAlert = item.alerts[0];
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="grid gap-0 lg:grid-cols-[260px_1fr]">
+        <div className="min-h-56 bg-slate-100">
+          {analysis.previewUrl ? (
+            <img
+              src={analysis.previewUrl}
+              alt="Evidencia IA"
+              className="h-full min-h-56 w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full min-h-56 items-center justify-center p-4 text-center text-xs text-[#64748B]">
+              <span className="break-all">{analysis.objectKey}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-5 p-5">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-xs font-semibold text-[#047857]">
+                  {analysis.provider ?? 'AWS_TEXTRACT_REKOGNITION'}
+                </span>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-[#475569]">
+                  {analysisLabels[analysis.status]}
+                </span>
+                <span className="rounded-full bg-[#FEF3C7] px-2.5 py-1 text-xs font-semibold text-[#92400E]">
+                  {reviewLabels[analysis.reviewStatus ?? 'PENDING'] ?? 'Pendiente'}
+                </span>
+              </div>
+              <p className="mt-3 break-all text-sm font-semibold text-[#111827]">
+                {analysis.clientEvidenceId}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                className="h-9 px-3"
+                disabled={isReviewing || analysis.reviewStatus === 'ACCEPTED'}
+                onClick={() => onReview(analysis, 'ACCEPTED')}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Aceptar
+              </Button>
+              <Button
+                variant="danger"
+                className="h-9 px-3"
+                disabled={isReviewing || analysis.reviewStatus === 'REJECTED'}
+                onClick={() => onReview(analysis, 'REJECTED')}
+              >
+                <XCircle className="h-4 w-4" />
+                Rechazar
+              </Button>
+            </div>
+          </div>
+
+          <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <DetailRow label="Confianza" value={formatScore(analysis.confidenceScore)} />
+            <DetailRow label="Riesgo/fraude" value={formatScore(analysis.fraudScore)} />
+            <DetailRow label="Conductor" value={item.driver?.email ?? (analysis.driverId ? `#${analysis.driverId}` : null)} />
+            <DetailRow label="Vehiculo" value={item.vehicle?.plateNumber ?? (item.route?.vehicleId ? `#${item.route.vehicleId}` : null)} />
+            <DetailRow label="Ruta" value={item.route?.title ?? (analysis.routeId ? `#${analysis.routeId}` : null)} />
+            <DetailRow label="Orden" value={item.order?.city ?? (analysis.orderId ? `#${analysis.orderId}` : null)} />
+            <DetailRow label="Incidente" value={incidentId ? `#${incidentId}` : null} />
+            <DetailRow label="Completado" value={formatDateTime(analysis.completedAt)} />
+          </dl>
+
+          <div className="rounded-lg border border-[#E5E7EB] bg-white p-3 text-sm text-[#374151]">
+            {analysis.validationSummary ?? analysis.failureReason ?? 'Sin resumen registrado.'}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {incidentId ? (
+              <a
+                href={`/incidents?incidentId=${incidentId}`}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#E2E8F0] bg-white px-3 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Abrir incidente
+              </a>
+            ) : null}
+            {primaryAlert ? (
+              <Button variant="secondary" className="h-9 px-3" onClick={() => onOpenAlert(primaryAlert)}>
+                Abrir alerta
+              </Button>
+            ) : null}
+            {item.degradedSections.length > 0 ? (
+              <span className="text-xs font-medium text-[#B45309]">
+                Datos parciales: {item.degradedSections.map((section) => section.section).join(', ')}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function SmartVisionPage() {
+  const [activeTab, setActiveTab] = useState<'alerts' | 'evidence'>('alerts');
   const [statusFilter, setStatusFilter] = useState<'' | AlertStatus>('');
+  const [analysisStatusFilter, setAnalysisStatusFilter] = useState<'' | AnalysisStatus>('');
   const [selectedAlert, setSelectedAlert] = useState<AiAlert | null>(null);
   const dashboard = useDashboard();
   const alertsQuery = useSmartVisionAlerts(statusFilter || undefined);
+  const analysesQuery = useSmartVisionAnalyses(analysisStatusFilter || undefined);
+  const reviewMutation = useReviewEvidenceAnalysis();
   const alerts = alertsQuery.data ?? [];
+  const analyses = analysesQuery.data ?? [];
 
   const selectedAlertInList = useMemo(
     () => alerts.find((alert) => alert.alertId === selectedAlert?.alertId) ?? null,
@@ -176,16 +358,29 @@ export function SmartVisionPage() {
 
   const activeAlert = selectedAlertInList ?? selectedAlert;
 
-  if (dashboard.isLoading && alertsQuery.isLoading) return <SmartVisionSkeleton />;
+  const handleReview = (analysis: EvidenceAnalysis, reviewStatus: 'ACCEPTED' | 'REJECTED') => {
+    const notes =
+      reviewStatus === 'REJECTED'
+        ? window.prompt('Nota de rechazo')?.trim()
+        : undefined;
+    if (reviewStatus === 'REJECTED' && notes === undefined) return;
+    reviewMutation.mutate({
+      clientEvidenceId: analysis.clientEvidenceId,
+      request: { reviewStatus, notes },
+    });
+  };
 
-  if (dashboard.isError || alertsQuery.isError) {
+  if (dashboard.isLoading && alertsQuery.isLoading && analysesQuery.isLoading) return <SmartVisionSkeleton />;
+
+  if (dashboard.isError || alertsQuery.isError || analysesQuery.isError) {
     return (
       <ApiErrorState
         title="No se pudo cargar SmartVision"
-        message="Verifica que el gateway exponga /api/v1/ai-validation y que tu sesion tenga token valido."
+        message="Verifica que el gateway exponga SmartVision y que tu sesion tenga token valido."
         onRetry={() => {
           void dashboard.refetch();
           void alertsQuery.refetch();
+          void analysesQuery.refetch();
         }}
       />
     );
@@ -202,37 +397,56 @@ export function SmartVisionPage() {
             <h1 className="text-2xl font-bold tracking-tight text-[#111827]">SmartVision AI</h1>
             <p className="mt-0.5 text-sm text-[#6B7280]">
               Validacion asincronica de evidencias con inteligencia artificial
-              {alertsQuery.isFetching || dashboard.isFetching ? ' · Actualizando...' : ''}
+              {alertsQuery.isFetching || analysesQuery.isFetching || dashboard.isFetching ? ' - Actualizando...' : ''}
             </p>
           </div>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Select
-            value={statusFilter}
-            onChange={(event) => {
-              setStatusFilter(event.target.value as '' | AlertStatus);
-              setSelectedAlert(null);
-            }}
-            className="w-full sm:w-44"
-            aria-label="Filtrar alertas por estado"
-          >
-            {statusOptions.map((option) => (
-              <option key={option.value || 'all'} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
+          {activeTab === 'alerts' ? (
+            <Select
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value as '' | AlertStatus);
+                setSelectedAlert(null);
+              }}
+              className="w-full sm:w-44"
+              aria-label="Filtrar alertas por estado"
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value || 'all'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Select
+              value={analysisStatusFilter}
+              onChange={(event) => setAnalysisStatusFilter(event.target.value as '' | AnalysisStatus)}
+              className="w-full sm:w-48"
+              aria-label="Filtrar evidencias por estado"
+            >
+              {analysisStatusOptions.map((option) => (
+                <option key={option.value || 'all'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          )}
           <Button
             variant="secondary"
             onClick={() => {
               void dashboard.refetch();
               void alertsQuery.refetch();
+              void analysesQuery.refetch();
             }}
-            disabled={alertsQuery.isFetching || dashboard.isFetching}
+            disabled={alertsQuery.isFetching || analysesQuery.isFetching || dashboard.isFetching}
           >
             <RefreshCw
-              className={cn('h-4 w-4', (alertsQuery.isFetching || dashboard.isFetching) && 'animate-spin')}
+              className={cn(
+                'h-4 w-4',
+                (alertsQuery.isFetching || analysesQuery.isFetching || dashboard.isFetching) && 'animate-spin',
+              )}
             />
             Refrescar
           </Button>
@@ -245,7 +459,45 @@ export function SmartVisionPage() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+      <div className="flex flex-wrap gap-2 border-b border-[#E5E7EB]">
+        <button
+          type="button"
+          onClick={() => setActiveTab('alerts')}
+          className={cn(
+            'px-4 py-2 text-sm font-semibold',
+            activeTab === 'alerts'
+              ? 'border-b-2 border-[#0F766E] text-[#0F766E]'
+              : 'text-[#64748B] hover:text-[#111827]',
+          )}
+        >
+          Alertas
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('evidence')}
+          className={cn(
+            'px-4 py-2 text-sm font-semibold',
+            activeTab === 'evidence'
+              ? 'border-b-2 border-[#0F766E] text-[#0F766E]'
+              : 'text-[#64748B] hover:text-[#111827]',
+          )}
+        >
+          Evidencias IA
+        </button>
+      </div>
+
+      {activeTab === 'evidence' ? (
+        <EvidenceInbox
+          analyses={analyses}
+          isReviewing={reviewMutation.isPending}
+          onReview={handleReview}
+          onOpenAlert={(alert) => {
+            setSelectedAlert(alert);
+            setActiveTab('alerts');
+          }}
+        />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-[#111827]">Alertas de evidencia</h2>
@@ -290,6 +542,7 @@ export function SmartVisionPage() {
           )}
         </div>
       </div>
+      )}
     </section>
   );
 }
