@@ -65,7 +65,7 @@ export function AddOrderToRouteDialog(props: Omit<RouteOrderDialogProps, 'title'
     <RouteOrderDialog
       {...props}
       title="Agregar orden a ruta"
-      emptyMessage="No hay ordenes disponibles para agregar."
+      emptyMessage="No hay ordenes listas para despacho disponibles. En la vista de ordenes, marca una orden como lista para despacho antes de asignarla."
       submitLabel="Agregar orden"
     />
   );
