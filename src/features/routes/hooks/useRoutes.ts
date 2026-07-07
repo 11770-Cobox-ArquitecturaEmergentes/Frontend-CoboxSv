@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { routesService } from '../services';
 import type { AssignDriverPayload, AssignVehiclePayload, CreateRoutePayload, Route, RouteOrderPayload } from '../types';
 
+const routesQueryKey = ['routes', 'fleet'] as const;
+
 function updateRouteCache(current: Route[] | undefined, updatedRoute: Route) {
   return (current ?? []).map((route) => (route.id === updatedRoute.id ? updatedRoute : route));
 }
@@ -15,10 +17,10 @@ function useRouteMutation<TVariables>(
   return useMutation({
     mutationFn,
     onSuccess: (updatedRoute, variables) => {
-      queryClient.setQueryData<Route[]>(['routes'], (current) => updateRouteCache(current, updatedRoute));
-      queryClient.setQueryData<Route>(['routes', updatedRoute.id], updatedRoute);
-      void queryClient.invalidateQueries({ queryKey: ['routes'] });
-      void queryClient.invalidateQueries({ queryKey: ['routes', updatedRoute.id] });
+      queryClient.setQueryData<Route[]>(routesQueryKey, (current) => updateRouteCache(current, updatedRoute));
+      queryClient.setQueryData<Route>(['routes', 'fleet', updatedRoute.id], updatedRoute);
+      void queryClient.invalidateQueries({ queryKey: routesQueryKey });
+      void queryClient.invalidateQueries({ queryKey: ['routes', 'fleet', updatedRoute.id] });
       extraInvalidate?.(updatedRoute, variables, queryClient);
     },
   });
@@ -26,14 +28,14 @@ function useRouteMutation<TVariables>(
 
 export function useRoutes() {
   return useQuery({
-    queryKey: ['routes'],
+    queryKey: routesQueryKey,
     queryFn: routesService.getRoutes,
   });
 }
 
 export function useRoute(routeId?: string) {
   return useQuery({
-    queryKey: ['routes', routeId],
+    queryKey: ['routes', 'fleet', routeId],
     queryFn: () => routesService.getRouteById(routeId as string),
     enabled: Boolean(routeId),
   });
@@ -45,7 +47,7 @@ export function useCreateRoute() {
   return useMutation({
     mutationFn: (payload: CreateRoutePayload) => routesService.createRoute(payload),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['routes'] });
+      void queryClient.invalidateQueries({ queryKey: routesQueryKey });
     },
   });
 }
@@ -62,8 +64,13 @@ export function useAssignDriverToRoute() {
 }
 
 export function useAssignVehicleToRoute() {
-  return useRouteMutation(({ routeId, payload }: { routeId: string; payload: AssignVehiclePayload }) =>
-    routesService.assignVehicleToRoute(routeId, payload),
+  return useRouteMutation(
+    ({ routeId, payload }: { routeId: string; payload: AssignVehiclePayload }) =>
+      routesService.assignVehicleToRoute(routeId, payload),
+    (_updatedRoute, variables, queryClient) => {
+      void queryClient.invalidateQueries({ queryKey: ['vehicles', 'fleet'] });
+      void queryClient.invalidateQueries({ queryKey: ['vehicles', variables.payload.vehicleId] });
+    },
   );
 }
 

@@ -4,7 +4,7 @@ import { AuthLayout, DashboardLayout, DriverLayout } from '@/components/layouts'
 import { LoginPage, RegisterPage } from '@/features/auth';
 import { DashboardPage } from '@/features/dashboard';
 import { SmartVisionPage } from '@/features/smartvision';
-import { VehiclesPage } from '@/modules/vehicles';
+import { VehiclesPage } from '@/features/vehicles';
 import { DriversPage } from '@/features/drivers';
 import { OrdersPage } from '@/features/orders';
 import { RoutesPage } from '@/features/routes';

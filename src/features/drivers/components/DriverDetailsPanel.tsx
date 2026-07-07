@@ -43,24 +43,29 @@ function DriverRoutesList({ routes }: { routes: DriverRoute[] }) {
 
   return (
     <div className="divide-y divide-slate-100">
-      {routes.map((route) => (
-        <div key={route.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#2563EB]">
-            <Route className="h-4 w-4" aria-hidden="true" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-medium text-slate-950">{route.title}</p>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                {routeStatusLabels[route.status]}
-              </span>
+      {routes.map((route) => {
+        const orderIds = route.orderIds ?? [];
+        const finishedOrderIds = route.finishedOrderIds ?? [];
+
+        return (
+          <div key={route.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-[#2563EB]">
+              <Route className="h-4 w-4" aria-hidden="true" />
             </div>
-            <p className="mt-1 text-sm text-slate-500">
-              Vehiculo #{route.vehicleId ?? '-'} · {route.finishedOrderIds.length}/{route.orderIds.length} ordenes finalizadas
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-medium text-slate-950">{route.title}</p>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                  {routeStatusLabels[route.status]}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-slate-500">
+                Vehiculo #{route.vehicleId ?? '-'} · {finishedOrderIds.length}/{orderIds.length} ordenes finalizadas
+              </p>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -28,6 +28,9 @@ export function RouteCard({
   onViewDetails,
   isStarting = false,
 }: RouteCardProps) {
+  const orderIds = route.orderIds ?? [];
+  const finishedOrderIds = route.finishedOrderIds ?? [];
+
   return (
     <Card className="flex flex-col justify-between p-5 transition-colors hover:border-slate-300">
       <div className="space-y-4">
@@ -39,7 +42,7 @@ export function RouteCard({
             <div className="min-w-0">
               <h2 className="truncate font-bold text-slate-900">{route.title}</h2>
               <p className="mt-1 text-xs text-[#64748B]">
-                {route.finishedOrderIds.length}/{route.orderIds.length} ordenes finalizadas
+                {finishedOrderIds.length}/{orderIds.length} ordenes finalizadas
               </p>
             </div>
           </div>
@@ -66,7 +69,7 @@ export function RouteCard({
               <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
               Ordenes
             </span>
-            <span className="font-semibold text-slate-800">{route.orderIds.length}</span>
+            <span className="font-semibold text-slate-800">{orderIds.length}</span>
           </div>
         </div>
       </div>

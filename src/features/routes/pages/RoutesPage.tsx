@@ -5,7 +5,7 @@ import { ApiErrorState } from '@/components/shared';
 import { Button, Card, Input, Select, Skeleton, useToast } from '@/components/ui';
 import { useDrivers } from '@/features/drivers';
 import { ordersService } from '@/features/orders/services';
-import { useVehicles } from '@/modules/vehicles';
+import { useVehicles } from '@/features/vehicles';
 import {
   AddDeliveredOrderToRouteDialog,
   AddOrderToRouteDialog,
@@ -86,7 +86,7 @@ export function RoutesPage() {
         route.title.toLowerCase().includes(term) ||
         driver?.email.toLowerCase().includes(term) ||
         driver?.licenceNumber.toLowerCase().includes(term) ||
-        vehicle?.plate.toLowerCase().includes(term);
+        vehicle?.plateNumber.toLowerCase().includes(term);
       const matchesStatus = statusFilter === 'all' || route.status === statusFilter;
       const matchesDriver = driverFilter === 'all' || route.driverId === driverFilter;
       const matchesVehicle = vehicleFilter === 'all' || route.vehicleId === vehicleFilter;
@@ -97,17 +97,14 @@ export function RoutesPage() {
 
   const actionCandidateOrders = useMemo(() => {
     if (!actionRoute) return [];
+    const orderIds = actionRoute.orderIds ?? [];
+    const finishedOrderIds = actionRoute.finishedOrderIds ?? [];
 
     if (action === 'delivered') {
-      return orders.filter((order) => actionRoute.orderIds.includes(order.id) && !actionRoute.finishedOrderIds.includes(order.id));
+      return orders.filter((order) => orderIds.includes(order.id) && !finishedOrderIds.includes(order.id));
     }
 
-    return orders.filter(
-      (order) =>
-        order.status !== 'DELIVERED' &&
-        order.status !== 'CANCELLED' &&
-        !actionRoute.orderIds.includes(order.id),
-    );
+    return orders.filter((order) => order.status === 'READY_FOR_DISPATCH' && !orderIds.includes(order.id));
   }, [action, actionRoute, orders]);
 
   const closeAction = () => {
@@ -133,7 +130,7 @@ export function RoutesPage() {
 
   const vehicleLabel = (route: Route) => {
     const vehicle = route.vehicleId ? vehicleById.get(route.vehicleId) : null;
-    return vehicle ? vehicle.plate : route.vehicleId ? `Vehiculo #${route.vehicleId}` : 'Sin asignar';
+    return vehicle ? vehicle.plateNumber : route.vehicleId ? `Vehiculo #${route.vehicleId}` : 'Sin asignar';
   };
 
   const handleCreateRoute = (payload: CreateRoutePayload) => {
@@ -264,7 +261,7 @@ export function RoutesPage() {
           <option value="all">Todos los vehiculos</option>
           {vehicles.map((vehicle) => (
             <option key={vehicle.id} value={vehicle.id}>
-              {vehicle.plate}
+              {vehicle.plateNumber}
             </option>
           ))}
         </Select>

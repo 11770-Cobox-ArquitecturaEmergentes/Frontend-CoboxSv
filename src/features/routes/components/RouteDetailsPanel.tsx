@@ -27,6 +27,8 @@ export function RouteDetailsPanel({ routeId, driverLabel, vehicleLabel, isStarti
   const routeQuery = useRoute(routeId);
   const route = routeQuery.data;
   const isNotFound = isAxiosError(routeQuery.error) && routeQuery.error.response?.status === 404;
+  const orderIds = route?.orderIds ?? [];
+  const finishedOrderIds = route?.finishedOrderIds ?? [];
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/30">
@@ -65,7 +67,7 @@ export function RouteDetailsPanel({ routeId, driverLabel, vehicleLabel, isStarti
                       <RouteStatusBadge status={route.status} />
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
-                      {route.finishedOrderIds.length}/{route.orderIds.length} ordenes finalizadas
+                      {finishedOrderIds.length}/{orderIds.length} ordenes finalizadas
                     </p>
                   </div>
                 </div>
@@ -93,17 +95,17 @@ export function RouteDetailsPanel({ routeId, driverLabel, vehicleLabel, isStarti
                   <ClipboardList className="h-4 w-4 text-[#2563EB]" aria-hidden="true" />
                   Ordenes
                 </div>
-                {route.orderIds.length === 0 ? (
+                {orderIds.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
                     Esta ruta no tiene ordenes asociadas.
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    {route.orderIds.map((orderId) => (
+                    {orderIds.map((orderId) => (
                       <div key={orderId} className="flex items-center justify-between py-2 text-sm">
                         <span className="font-medium text-slate-950">Orden #{orderId}</span>
                         <span className="text-slate-500">
-                          {route.finishedOrderIds.includes(orderId) ? 'Entregada' : 'Pendiente'}
+                          {finishedOrderIds.includes(orderId) ? 'Entregada' : 'Pendiente'}
                         </span>
                       </div>
                     ))}

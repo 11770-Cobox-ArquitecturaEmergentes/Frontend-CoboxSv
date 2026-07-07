@@ -1,5 +1,5 @@
 import { Dialog, Button, Select } from '@/components/ui';
-import { useVehicles } from '@/modules/vehicles';
+import { useVehicles } from '@/features/vehicles';
 import type { Route } from '../types';
 
 type AssignVehicleToRouteDialogProps = {
@@ -37,7 +37,7 @@ export function AssignVehicleToRouteDialog({
             <option value="">Selecciona un vehiculo</option>
             {vehicles.map((vehicle) => (
               <option key={vehicle.id} value={vehicle.id}>
-                {vehicle.plate} ({vehicle.capacity.toLocaleString('es-PE')} kg)
+                {vehicle.plateNumber} ({Number(vehicle.capacityKg ?? 0).toLocaleString('es-PE')} kg)
               </option>
             ))}
           </Select>
