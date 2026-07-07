@@ -1,9 +1,20 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth0 } from '@auth0/auth0-react';
+import { useDispatch } from 'react-redux';
 import { LogOut, Truck } from 'lucide-react';
 import { sidebarItems } from '@/config/navigation';
+import { logout } from '@/features/auth/store/authSlice';
 import { cn } from '@/utils';
 
 export function Sidebar() {
+  const dispatch = useDispatch();
+  const { logout: auth0Logout } = useAuth0();
+
+  const handleLogout = () => {
+    dispatch(logout());
+    auth0Logout({ logoutParams: { returnTo: window.location.origin + '/auth/login' } });
+  };
+
   return (
     <aside className="flex min-h-screen w-64 flex-col border-r border-[#E2E8F0] bg-white text-slate-950">
       <div className="flex h-20 items-center justify-between border-b border-[#E2E8F0] px-6">
@@ -41,6 +52,7 @@ export function Sidebar() {
       </nav>
       <button
         type="button"
+        onClick={handleLogout}
         className="flex items-center gap-3 border-t border-[#E2E8F0] px-6 py-5 text-sm font-semibold text-slate-950 hover:text-[#0F766E]"
       >
         <LogOut className="h-5 w-5" />
