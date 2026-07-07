@@ -18,6 +18,9 @@ export type BackendIncidentResource = {
   severity: IncidentSeverity;
   status: IncidentStatus;
   responsibleUserId?: number;
+  sourceType?: 'AI_ALERT' | 'MANUAL' | null;
+  sourceAlertId?: string | null;
+  sourceClientEvidenceId?: string | null;
 };
 
 /** Frontend Domain Model */
@@ -31,6 +34,9 @@ export type Incident = {
   severity: IncidentSeverity;
   status: IncidentStatus;
   responsibleUserId?: number;
+  sourceType?: 'AI_ALERT' | 'MANUAL' | null;
+  sourceAlertId?: string | null;
+  sourceClientEvidenceId?: string | null;
 };
 
 /** Request Payloads */
