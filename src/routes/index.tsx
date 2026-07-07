@@ -7,7 +7,7 @@ import { SmartVisionPage } from '@/features/smartvision';
 import { VehiclesPage } from '@/modules/vehicles';
 import { DriversPage } from '@/features/drivers';
 import { OrdersPage } from '@/features/orders';
-import { RoutesPage } from '@/modules/routes';
+import { RoutesPage } from '@/features/routes';
 import { IncidentsPage } from '@/features/incidents';
 import { MaintenancePage } from '@/features/maintenance';
 import { ReportsPage } from '@/features/reports';

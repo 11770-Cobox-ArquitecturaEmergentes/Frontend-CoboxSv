@@ -1,7 +1,11 @@
+import { useMemo, useState } from 'react';
 import { ClipboardList, Route, UserRound, X } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import { ApiErrorState } from '@/components/shared';
-import { Button, Card, Skeleton } from '@/components/ui';
+import { Button, Card, Skeleton, useToast } from '@/components/ui';
+import { AssignDriverToRouteDialog } from '@/features/routes/components';
+import { useAssignDriverToRoute, useRoutes } from '@/features/routes/hooks';
+import { validatePositiveId } from '@/features/routes/validations';
 import { useDriver, useDriverRoutes } from '../hooks';
 import type { DriverRoute } from '../types';
 import { DriverStatusBadge } from './DriverCard';
@@ -62,9 +66,47 @@ function DriverRoutesList({ routes }: { routes: DriverRoute[] }) {
 }
 
 export function DriverDetailsPanel({ driverId, onClose }: DriverDetailsPanelProps) {
+  const [isAssignRouteOpen, setIsAssignRouteOpen] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState('');
   const driverQuery = useDriver(driverId);
   const routesQuery = useDriverRoutes(driverId);
+  const allRoutesQuery = useRoutes();
+  const assignDriverToRoute = useAssignDriverToRoute();
+  const { toast } = useToast();
   const isDriverNotFound = isAxiosError(driverQuery.error) && driverQuery.error.response?.status === 404;
+  const assignableRoutes = useMemo(
+    () => (allRoutesQuery.data ?? []).filter((route) => route.status === 'PLANNED' && route.driverId !== driverId),
+    [allRoutesQuery.data, driverId],
+  );
+
+  const openAssignRoute = () => {
+    setSelectedRouteId(assignableRoutes[0]?.id ?? '');
+    setIsAssignRouteOpen(true);
+  };
+
+  const closeAssignRoute = () => {
+    setIsAssignRouteOpen(false);
+    setSelectedRouteId('');
+  };
+
+  const handleAssignRoute = () => {
+    if (!selectedRouteId) return;
+    const validationError = validatePositiveId(selectedRouteId, 'La ruta');
+    if (validationError) {
+      toast({ title: validationError, type: 'error' });
+      return;
+    }
+    assignDriverToRoute.mutate(
+      { routeId: selectedRouteId, payload: { driverId } },
+      {
+        onSuccess: () => {
+          closeAssignRoute();
+          toast({ title: 'Ruta asignada al conductor', type: 'success' });
+        },
+        onError: () => toast({ title: 'No se pudo asignar la ruta', type: 'error' }),
+      },
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/30">
@@ -109,9 +151,19 @@ export function DriverDetailsPanel({ driverId, onClose }: DriverDetailsPanelProp
               </Card>
 
               <Card className="p-4">
-                <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-950">
-                  <ClipboardList className="h-4 w-4 text-[#2563EB]" aria-hidden="true" />
-                  Rutas asignadas
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                    <ClipboardList className="h-4 w-4 text-[#2563EB]" aria-hidden="true" />
+                    Rutas asignadas
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className="h-9 w-full sm:w-auto"
+                    disabled={allRoutesQuery.isLoading || assignableRoutes.length === 0}
+                    onClick={openAssignRoute}
+                  >
+                    Asignar ruta
+                  </Button>
                 </div>
 
                 {routesQuery.isLoading ? <Skeleton className="h-36" /> : null}
@@ -124,6 +176,23 @@ export function DriverDetailsPanel({ driverId, onClose }: DriverDetailsPanelProp
           ) : null}
         </div>
       </aside>
+
+      {driverQuery.data ? (
+        <AssignDriverToRouteDialog
+          open={isAssignRouteOpen}
+          route={null}
+          routes={assignableRoutes}
+          selectedRouteId={selectedRouteId}
+          drivers={[]}
+          selectedDriverId={driverId}
+          fixedDriverLabel={`${driverQuery.data.email} - ${driverQuery.data.licenceNumber}`}
+          isSubmitting={assignDriverToRoute.isPending}
+          onSelectedRouteChange={setSelectedRouteId}
+          onSelectedDriverChange={() => undefined}
+          onClose={closeAssignRoute}
+          onSubmit={handleAssignRoute}
+        />
+      ) : null}
     </div>
   );
 }
